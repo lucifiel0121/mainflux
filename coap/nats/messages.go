@@ -25,6 +25,5 @@ func (pub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	if err != nil {
 		return err
 	}
-
-	return pub.nc.Publish(topic, data)
+	return pub.nc.Publish(msg.Channel, data)
 }

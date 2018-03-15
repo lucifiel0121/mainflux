@@ -6,11 +6,15 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mainflux/mainflux/coap"
+	"github.com/dustin/go-coap"
+	"github.com/go-kit/kit/log"
+	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
+	adapter "github.com/mainflux/mainflux/coap"
+	"github.com/mainflux/mainflux/coap/api"
 	"github.com/mainflux/mainflux/coap/nats"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
 
 	broker "github.com/nats-io/go-nats"
-	"go.uber.org/zap"
 )
 
 const (
@@ -27,14 +31,31 @@ type config struct {
 func main() {
 	cfg := loadConfig()
 
-	logger, _ := zap.NewProduction()
-	defer logger.Sync() // flushes buffer, if any
+	logger := log.NewJSONLogger(log.NewSyncWriter(os.Stdout))
+	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 
 	nc := connectToNats(cfg, logger)
 	defer nc.Close()
 
 	pub := nats.NewMessagePublisher(nc)
-	ca := adapter.NewCoAPAdapter(logger, pub)
+	svc := api.LoggingMiddleware(pub, logger)
+	svc = api.MetricsMiddleware(
+		svc,
+		kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: "http_adapter",
+			Subsystem: "api",
+			Name:      "request_count",
+			Help:      "Number of requests received.",
+		}, []string{"method"}),
+		kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
+			Namespace: "http_adapter",
+			Subsystem: "api",
+			Name:      "request_latency_microseconds",
+			Help:      "Total duration of requests in microseconds.",
+		}, []string{"method"}),
+	)
+
+	ca := adapter.New(logger, svc, nc)
 
 	nc.Subscribe("src.http", ca.BridgeHandler)
 	nc.Subscribe("src.mqtt", ca.BridgeHandler)
@@ -43,7 +64,8 @@ func main() {
 
 	go func() {
 		coapAddr := fmt.Sprintf(":%d", cfg.Port)
-		errs <- ca.Serve(coapAddr)
+		logger.Log("info", fmt.Sprintf("Start CoAP server at %s", coapAddr))
+		errs <- coap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca))
 	}()
 
 	go func() {
@@ -53,7 +75,7 @@ func main() {
 	}()
 
 	c := <-errs
-	logger.Info("terminated", zap.String("error", c.Error()))
+	logger.Log("terminated", fmt.Sprintf("Proces exited: %s", c.Error()))
 }
 
 func loadConfig() *config {
@@ -72,10 +94,10 @@ func env(key, fallback string) string {
 	return value
 }
 
-func connectToNats(cfg *config, logger *zap.Logger) *broker.Conn {
+func connectToNats(cfg *config, logger log.Logger) *broker.Conn {
 	nc, err := broker.Connect(cfg.NatsURL)
 	if err != nil {
-		logger.Error("Failed to connect to NATS", zap.Error(err))
+		logger.Log("error", fmt.Sprintf("Failed to connect to NATS %s", err))
 		os.Exit(1)
 	}
 
