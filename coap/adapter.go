@@ -2,8 +2,10 @@ package coap
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 
 	"encoding/base64"
 
@@ -11,13 +13,19 @@ import (
 	coap "github.com/dustin/go-coap"
 	"github.com/go-kit/kit/log"
 	"github.com/mainflux/mainflux"
+	manager "github.com/mainflux/mainflux/manager/client"
 	broker "github.com/nats-io/go-nats"
 )
 
 const (
-	protocol string = "coap"
+	token    string = "token"
+	prefix   string = "src.coap."
 	channel  string = "channel_id"
-	chPrefix string = "src.coap."
+	protocol string = "coap"
+)
+
+var (
+	errUnauthorizedAccess error = errors.New("missing or invalid credentials provided")
 )
 
 // Observer struct provides support to observe message types.
@@ -39,16 +47,18 @@ type AdapterService struct {
 	pub    mainflux.MessagePublisher
 	subs   map[string]Subscriber
 	nc     *broker.Conn
+	mc     *manager.ManagerClient
 }
 
 // New creates new CoAP adapter service struct.
-func New(logger log.Logger, pub mainflux.MessagePublisher, nc *broker.Conn) *AdapterService {
+func New(logger log.Logger, pub mainflux.MessagePublisher, nc *broker.Conn, mc *manager.ManagerClient) *AdapterService {
 	ca := &AdapterService{
 		logger: logger,
 		pub:    pub,
 		obsMap: make(map[string][]Observer),
 		subs:   make(map[string]Subscriber),
 		nc:     nc,
+		mc:     mc,
 	}
 	return ca
 }
@@ -57,11 +67,26 @@ func New(logger log.Logger, pub mainflux.MessagePublisher, nc *broker.Conn) *Ada
 func (ca *AdapterService) SendMessage(l *net.UDPConn, a *net.UDPAddr, m *coap.Message) *coap.Message {
 	ca.logger.Log("info", fmt.Sprintf("Got message in sendMessage: path=%q: %#v from %v", m.Path(), m, a))
 	var res *coap.Message
-
 	if len(m.Payload) == 0 && m.IsConfirmable() {
 		res.Code = coap.BadRequest
 		return res
 	}
+
+	// Uri-Query option ID is 15 (0xf).
+	token, err := ca.token(m.Option(0xf))
+	if err != nil {
+		res.Code = coap.Unauthorized
+		return res
+	}
+
+	cid := prefix + mux.Var(m, channel)
+
+	publisher, err := ca.mc.CanAccess(cid, token)
+	if err != nil {
+		res.Code = coap.Unauthorized
+		return res
+	}
+
 	if m.IsConfirmable() {
 		res = &coap.Message{
 			Type:      coap.Acknowledgement,
@@ -73,12 +98,9 @@ func (ca *AdapterService) SendMessage(l *net.UDPConn, a *net.UDPAddr, m *coap.Me
 		res.SetOption(coap.ContentFormat, coap.AppJSON)
 	}
 
-	// Channel ID
-	cid := chPrefix + mux.Var(m, channel)
-
 	n := mainflux.RawMessage{
 		Channel:   cid,
-		Publisher: "", // TODO authorize
+		Publisher: publisher,
 		Protocol:  protocol,
 		Payload:   m.Payload,
 	}
@@ -108,11 +130,22 @@ func (ca *AdapterService) notify(nm *broker.Msg) {
 	ca.Transmit(m.Channel, m.Payload, m.Publisher)
 }
 
+func (ca *AdapterService) token(opt interface{}) (string, error) {
+	if opt == nil {
+		return "", errUnauthorizedAccess
+	}
+	val := opt.(string)
+	arr := strings.Split(val, "=")
+	if len(arr) != 2 || strings.ToLower(arr[0]) != "token" {
+		return "", errUnauthorizedAccess
+	}
+	return arr[1], nil
+}
+
 // ObserveMessage method deals with CoAP observe messages.
 func (ca *AdapterService) ObserveMessage(l *net.UDPConn, a *net.UDPAddr, m *coap.Message) *coap.Message {
 	ca.logger.Log("info", fmt.Sprintf("Got message in ObserveMessage: path=%q: %#v from %v", m.Path(), m, a))
 	var res *coap.Message
-
 	if m.IsConfirmable() {
 		res = &coap.Message{
 			Type:      coap.Acknowledgement,
@@ -123,17 +156,30 @@ func (ca *AdapterService) ObserveMessage(l *net.UDPConn, a *net.UDPAddr, m *coap
 		}
 		res.SetOption(coap.ContentFormat, coap.AppJSON)
 	}
+	// Uri-Query option ID is 15 (0xf).
+	token, err := ca.token(m.Option(0xf))
+	if err != nil {
+		res.Code = coap.Unauthorized
+		return res
+	}
 
-	o := &Observer{
-		conn:    l,
-		addr:    a,
-		message: m,
+	cid := prefix + mux.Var(m, channel)
+
+	_, err = ca.mc.CanAccess(cid, token)
+	if err != nil {
+		res.Code = coap.Unauthorized
+		return res
 	}
 
 	if value, ok := m.Option(coap.Observe).(uint32); ok && value == 0 {
-		ca.registerSub(o)
+		o := &Observer{
+			conn:    l,
+			addr:    a,
+			message: m,
+		}
+		ca.registerSub(o, cid)
 	} else {
-		ca.deregisterSub(m)
+		ca.deregisterSub(m, cid)
 	}
 
 	if m.IsConfirmable() {
@@ -142,8 +188,7 @@ func (ca *AdapterService) ObserveMessage(l *net.UDPConn, a *net.UDPAddr, m *coap
 	return res
 }
 
-func (ca *AdapterService) registerSub(o *Observer) error {
-	cid := chPrefix + mux.Var(o.message, channel)
+func (ca *AdapterService) registerSub(o *Observer, cid string) error {
 	res, err := ca.nc.Subscribe(cid, ca.notify)
 	s := make(map[string]*Observer)
 	if err != nil {
@@ -157,8 +202,7 @@ func (ca *AdapterService) registerSub(o *Observer) error {
 	return nil
 }
 
-func (ca *AdapterService) deregisterSub(m *coap.Message) error {
-	cid := chPrefix + mux.Var(m, channel)
+func (ca *AdapterService) deregisterSub(m *coap.Message, cid string) error {
 	sub, ok := ca.subs[cid]
 	if !ok {
 		return nil

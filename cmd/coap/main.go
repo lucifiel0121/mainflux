@@ -9,6 +9,9 @@ import (
 	"github.com/dustin/go-coap"
 	"github.com/go-kit/kit/log"
 	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
+	"github.com/mainflux/mainflux"
+	manager "github.com/mainflux/mainflux/manager/client"
+
 	adapter "github.com/mainflux/mainflux/coap"
 	"github.com/mainflux/mainflux/coap/api"
 	"github.com/mainflux/mainflux/coap/nats"
@@ -18,23 +21,35 @@ import (
 )
 
 const (
-	port       int    = 5683
-	defNatsURL string = broker.DefaultURL
-	envNatsURL string = "COAP_ADAPTER_NATS_URL"
+	defPort       int    = 5683
+	defNatsURL    string = broker.DefaultURL
+	defManagerURL string = "http://localhost:8180"
+	envPort       string = "MF_COAP_ADAPTER_PORT"
+	envNatsURL    string = "MF_NATS_URL"
+	envManagerURL string = "MF_MANAGER_URL"
 )
 
 type config struct {
-	Port    int
-	NatsURL string
+	ManagerURL string
+	NatsURL    string
+	Port       int
 }
 
 func main() {
-	cfg := loadConfig()
+	cfg := config{
+		ManagerURL: mainflux.Env(envManagerURL, defManagerURL),
+		NatsURL:    mainflux.Env(envNatsURL, defNatsURL),
+		Port:       defPort,
+	}
 
 	logger := log.NewJSONLogger(log.NewSyncWriter(os.Stdout))
 	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 
-	nc := connectToNats(cfg, logger)
+	nc, err := broker.Connect(cfg.NatsURL)
+	if err != nil {
+		logger.Log("error", err)
+		os.Exit(1)
+	}
 	defer nc.Close()
 
 	pub := nats.NewMessagePublisher(nc)
@@ -55,7 +70,9 @@ func main() {
 		}, []string{"method"}),
 	)
 
-	ca := adapter.New(logger, svc, nc)
+	mgr := manager.NewClient(cfg.ManagerURL)
+
+	ca := adapter.New(logger, svc, nc, &mgr)
 
 	nc.Subscribe("src.http", ca.BridgeHandler)
 	nc.Subscribe("src.mqtt", ca.BridgeHandler)
@@ -78,13 +95,6 @@ func main() {
 	logger.Log("terminated", fmt.Sprintf("Proces exited: %s", c.Error()))
 }
 
-func loadConfig() *config {
-	return &config{
-		NatsURL: env(envNatsURL, defNatsURL),
-		Port:    port,
-	}
-}
-
 func env(key, fallback string) string {
 	value := os.Getenv(key)
 	if value == "" {
@@ -92,14 +102,4 @@ func env(key, fallback string) string {
 	}
 
 	return value
-}
-
-func connectToNats(cfg *config, logger log.Logger) *broker.Conn {
-	nc, err := broker.Connect(cfg.NatsURL)
-	if err != nil {
-		logger.Log("error", fmt.Sprintf("Failed to connect to NATS %s", err))
-		os.Exit(1)
-	}
-
-	return nc
 }
