@@ -324,6 +324,7 @@
   version = "v1.1.1"
 
 [[projects]]
+<<<<<<< HEAD
   name = "go.uber.org/atomic"
   packages = ["."]
   revision = "8474b86a5a6f79c443ce4b2992817ff32cf208b8"
@@ -349,6 +350,8 @@
   version = "v1.8.0"
 
 [[projects]]
+=======
+>>>>>>> Remove Zap logger dependency
   branch = "master"
   name = "golang.org/x/crypto"
   packages = [
