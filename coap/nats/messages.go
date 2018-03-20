@@ -15,8 +15,8 @@ type natsPublisher struct {
 	nc *broker.Conn
 }
 
-// NewMessagePublisher instantiates NATS message publisher.
-func NewMessagePublisher(nc *broker.Conn) mainflux.MessagePublisher {
+// New instantiates NATS message publisher.
+func New(nc *broker.Conn) mainflux.MessagePublisher {
 	return &natsPublisher{nc}
 }
 
