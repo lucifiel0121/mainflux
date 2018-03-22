@@ -6,13 +6,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/dustin/go-coap"
+	gocoap "github.com/dustin/go-coap"
 	"github.com/go-kit/kit/log"
 	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
 	"github.com/mainflux/mainflux"
 	manager "github.com/mainflux/mainflux/manager/client"
 
-	adapter "github.com/mainflux/mainflux/coap"
+	"github.com/mainflux/mainflux/coap"
 	"github.com/mainflux/mainflux/coap/api"
 	"github.com/mainflux/mainflux/coap/nats"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
@@ -72,17 +72,14 @@ func main() {
 
 	mgr := manager.NewClient(cfg.ManagerURL)
 
-	ca := adapter.New(logger, svc, nc, &mgr)
-
-	nc.Subscribe("src.http", ca.BridgeHandler)
-	nc.Subscribe("src.mqtt", ca.BridgeHandler)
+	ca := coap.New(logger, svc, nc, &mgr)
 
 	errs := make(chan error, 2)
 
 	go func() {
 		coapAddr := fmt.Sprintf(":%d", cfg.Port)
-		logger.Log("info", fmt.Sprintf("Start CoAP server at %s", coapAddr))
-		errs <- coap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca))
+		logger.Log("message", fmt.Sprintf("CoAP adapter service started, exposed port %d", cfg.Port))
+		errs <- gocoap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca))
 	}()
 
 	go func() {

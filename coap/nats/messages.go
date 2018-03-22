@@ -7,8 +7,6 @@ import (
 	broker "github.com/nats-io/go-nats"
 )
 
-const topic string = "src.coap"
-
 var _ mainflux.MessagePublisher = (*natsPublisher)(nil)
 
 type natsPublisher struct {
