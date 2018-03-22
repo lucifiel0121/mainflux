@@ -39,7 +39,7 @@ type AdapterService struct {
 }
 
 // New creates new CoAP adapter service struct.
-func New(logger log.Logger, pub mainflux.MessagePublisher, nc *broker.Conn, mc *manager.ManagerClient) *AdapterService {
+func New(logger log.Logger, pub mainflux.MessagePublisher, nc *broker.Conn, mc *manager.ManagerClient) Service {
 	ca := &AdapterService{
 		logger: logger,
 		pub:    pub,

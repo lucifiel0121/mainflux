@@ -15,12 +15,17 @@ import (
 // obsHandle handles observe messages and keeps connection to client in order to send notifications.
 func (ca *AdapterService) obsHandle(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message, offset time.Duration, pub string) broker.MsgHandler {
 	return func(msg *broker.Msg) {
+		if msg == nil {
+			ca.logger.Log("error", fmt.Sprintf("Got an empty message from NATS"))
+			return
+		}
 		rawMsg := mainflux.RawMessage{}
 		proto.Unmarshal(msg.Data, &rawMsg)
 		if rawMsg.Publisher == pub {
 			// Don't notify yourself.
 			return
 		}
+
 		m.Type = gocoap.Confirmable
 		m.Payload = rawMsg.Payload
 		m.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
@@ -28,14 +33,14 @@ func (ca *AdapterService) obsHandle(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Me
 		m.Code = gocoap.Content
 		ca.logger.Log("message", fmt.Sprintf("Transmitting %v", msg))
 		if err := gocoap.Transmit(l, a, *m); err != nil {
-			ca.logger.Log("error", err)
+			ca.logger.Log("error", fmt.Sprintf("Can't notify client %s", err))
 		}
 		buff := []byte{}
 		l.SetReadDeadline(time.Now().Add(time.Second * offset))
 
 		resp, err := receive(l, buff)
 		if err != nil {
-			ca.logger.Log("error", err)
+			ca.logger.Log("error", fmt.Sprintf("Got timeout waiting to recieve client answer %s", err))
 			if err := msg.Sub.Unsubscribe(); err != nil {
 				ca.logger.Log("error", err)
 			}
@@ -88,7 +93,7 @@ func authorize(msg *gocoap.Message, res *gocoap.Message, cid string, access func
 
 	publisher, err = access(cid, key)
 	if err != nil {
-		// Note that this is not the best way to handle access, since problem could be
+		// Note that this is not the best way to handle access error, since problem could be
 		// reference to an unexisting channel, not invalid token.
 		res.Code = gocoap.Unauthorized
 	}

@@ -44,9 +44,3 @@ CGO_ENABLED=0 GOOS=[platform identifier] go build -ldflags "-s" -a -installsuffi
 # set the environment variables and run the service
 COAP_ADAPTER_NATS_URL=[NATS instance URL] app
 ```
-
-## Usage
-
-For more information about service capabilities and its usage, please check out
-the [API documentation](swagger.yaml).
-
