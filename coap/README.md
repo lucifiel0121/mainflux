@@ -9,9 +9,11 @@ The service is configured using the environment variables presented in the
 following table. Note that any unset variables will be replaced with their
 default values.
 
-| Variable              | Description       | Default               |
-|-----------------------|-------------------|-----------------------|
-| COAP_ADAPTER_NATS_URL | NATS instance URL | nats://localhost:4222 |
+| Variable              | Description            | Default                 |
+|-----------------------|------------------------|-------------------------|
+| MF_COAP_ADAPTER_PORT  | adapter listening port | `5683`                  |
+| MF_NATS_URL           | NATS instance URL      | `nats://localhost:4222` |
+| FM_MANAGER_URL        | manager service URL    | `http://localhost:8180` |
 
 ## Deployment
 
@@ -25,22 +27,16 @@ services:
     image: mainflux/coap-adapter:[version]
     container_name: [instance name]
     ports:
-      - [host machine port]:5683
+      - [host machine port]:[configured port]
     environment:
       COAP_ADAPTER_NATS_URL: [NATS instance URL]
 ```
 
-To start the service outside of the container, execute the following shell script:
+Running this service outside of container requires working instance of the NATS service.
+To build the service outside of the container, execute the following shell script:
 
 ```bash
-# download the latest version of the service
-go get github.com/mainflux/mainflux
-
-cd $GOPATH/src/github.com/mainflux/mainflux/cmd/coap
-
-# compile the app; make sure to set the proper GOOS value
-CGO_ENABLED=0 GOOS=[platform identifier] go build -ldflags "-s" -a -installsuffix cgo -o app
-
-# set the environment variables and run the service
-COAP_ADAPTER_NATS_URL=[NATS instance URL] app
+make coap
+cd build
+./mainflux-coap
 ```

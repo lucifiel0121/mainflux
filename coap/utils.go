@@ -12,15 +12,23 @@ import (
 	broker "github.com/nats-io/go-nats"
 )
 
+// AuthProvider represents ManagerClient which provides auth features.
+type AuthProvider interface {
+	CanAccess(string, string) (string, error)
+}
+
 // obsHandle handles observe messages and keeps connection to client in order to send notifications.
 func (ca *AdapterService) obsHandle(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message, offset time.Duration, pub string) broker.MsgHandler {
 	return func(msg *broker.Msg) {
 		if msg == nil {
-			ca.logger.Log("error", fmt.Sprintf("Got an empty message from NATS"))
+			ca.logger.Log("error", "Got an empty message from NATS")
 			return
 		}
 		rawMsg := mainflux.RawMessage{}
-		proto.Unmarshal(msg.Data, &rawMsg)
+		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
+			ca.logger.Log("error", fmt.Sprintf("Error converting NATS message to RawMessage %s", err))
+			return
+		}
 		if rawMsg.Publisher == pub {
 			// Don't notify yourself.
 			return
@@ -37,7 +45,6 @@ func (ca *AdapterService) obsHandle(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Me
 		}
 		buff := []byte{}
 		l.SetReadDeadline(time.Now().Add(time.Second * offset))
-
 		resp, err := receive(l, buff)
 		if err != nil {
 			ca.logger.Log("error", fmt.Sprintf("Got timeout waiting to recieve client answer %s", err))
@@ -49,6 +56,9 @@ func (ca *AdapterService) obsHandle(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Me
 			if err := teardown(l, msg); err != nil {
 				ca.logger.Log("error", err)
 			}
+		} else {
+			// Zero time sets deadline to no limit.
+			l.SetReadDeadline(time.Time{})
 		}
 	}
 }
@@ -70,7 +80,7 @@ func authKey(opt interface{}) (string, error) {
 		return "", errBadRequest
 	}
 	arr := strings.Split(val, "=")
-	if len(arr) != 2 || strings.ToLower(arr[0]) != "key" {
+	if len(arr) != 2 || strings.ToLower(arr[0]) != key {
 		return "", errBadRequest
 	}
 	return arr[1], nil
@@ -83,15 +93,15 @@ func teardown(conn *net.UDPConn, msg *broker.Msg) error {
 	return msg.Sub.Unsubscribe()
 }
 
-func authorize(msg *gocoap.Message, res *gocoap.Message, cid string, access func(string, string) (string, error)) (publisher string, err error) {
+func authorize(msg *gocoap.Message, res *gocoap.Message, cid string, auth AuthProvider) (publisher string, err error) {
 	// Device Key is passed as Uri-Query parameter which option ID is 15 (0xf).
-	key, err := authKey(msg.Option(0xf))
+	key, err := authKey(msg.Option(gocoap.URIQuery))
 	if err != nil {
 		res.Code = gocoap.BadRequest
 		return
 	}
 
-	publisher, err = access(cid, key)
+	publisher, err = auth.CanAccess(cid, key)
 	if err != nil {
 		// Note that this is not the best way to handle access error, since problem could be
 		// reference to an unexisting channel, not invalid token.

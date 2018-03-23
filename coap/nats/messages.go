@@ -2,8 +2,11 @@
 package nats
 
 import (
+	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/mainflux/mainflux"
+	"github.com/mainflux/mainflux/coap"
 	broker "github.com/nats-io/go-nats"
 )
 
@@ -14,7 +17,7 @@ type natsPublisher struct {
 }
 
 // New instantiates NATS message publisher.
-func New(nc *broker.Conn) mainflux.MessagePublisher {
+func New(nc *broker.Conn) coap.PubSub {
 	return &natsPublisher{nc}
 }
 
@@ -23,5 +26,10 @@ func (pub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	return pub.nc.Publish(msg.Channel, data)
+	subject := fmt.Sprintf("channel.%s", msg.Channel)
+	return pub.nc.Publish(subject, data)
+}
+
+func (pub *natsPublisher) Subscribe(subject string, cb broker.MsgHandler) (*broker.Subscription, error) {
+	return pub.nc.Subscribe(subject, cb)
 }
