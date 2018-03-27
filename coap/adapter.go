@@ -28,13 +28,15 @@ type Service interface {
 }
 
 const (
-	key      string = "key"
-	channel  string = "id"
-	protocol string = "coap"
+	key       string = "key"
+	channel   string = "id"
+	protocol  string = "coap"
+	maxPktLen int    = 1500
 )
 
 var (
 	errBadRequest = errors.New("bad request")
+	logger        log.Logger
 )
 
 // AdapterService struct represents CoAP adapter service implementation.
@@ -44,7 +46,8 @@ type AdapterService struct {
 }
 
 // New creates new CoAP adapter service struct.
-func New(logger log.Logger, pubSub PubSub) Service {
+func New(lgr log.Logger, pubSub PubSub) Service {
+	logger = lgr
 	ca := &AdapterService{
 		logger: logger,
 		pubSub: pubSub,
@@ -64,7 +67,7 @@ func (ca *AdapterService) Recieve(auth AuthProvider) MsgHandler {
 				Code:      gocoap.Content,
 				MessageID: m.MessageID,
 				Token:     m.Token,
-				Payload:   []byte(""),
+				Payload:   []byte{},
 			}
 			res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 		}
@@ -77,7 +80,7 @@ func (ca *AdapterService) Recieve(auth AuthProvider) MsgHandler {
 		cid := mux.Var(m, channel)
 		publisher, err := authorize(m, res, cid, auth)
 		if err != nil {
-			ca.logger.Log(err)
+			ca.logger.Log("error", fmt.Sprintf("%s", err))
 			return res
 		}
 
@@ -114,7 +117,7 @@ func (ca *AdapterService) Observe(auth AuthProvider) MsgHandler {
 				Code:      gocoap.Content,
 				MessageID: m.MessageID,
 				Token:     m.Token,
-				Payload:   []byte(""),
+				Payload:   []byte{},
 			}
 			res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 		}
@@ -125,7 +128,7 @@ func (ca *AdapterService) Observe(auth AuthProvider) MsgHandler {
 		}
 
 		cid := mux.Var(m, channel)
-		publisher, err := authorize(m, res, cid, auth)
+		_, err := authorize(m, res, cid, auth)
 		if err != nil {
 			ca.logger.Log(err)
 			return res
@@ -133,10 +136,12 @@ func (ca *AdapterService) Observe(auth AuthProvider) MsgHandler {
 
 		if value, ok := m.Option(gocoap.Observe).(uint32); ok && value == 0 {
 			subject := fmt.Sprintf("channel.%s", cid)
-			if _, err := ca.pubSub.Subscribe(subject, ca.obsHandle(l, a, m, 120, publisher)); err != nil {
+			if _, err := ca.pubSub.Subscribe(subject, obsHandle(l, a, m, 120)); err != nil {
 				ca.logger.Log("error", fmt.Sprintf("Error occured during subscription to NATS %s", err))
 				res.Code = gocoap.InternalServerError
+				return res
 			}
+			res.AddOption(gocoap.Observe, 0)
 		} else {
 			// TODO Handle explicit unsubscription.
 		}

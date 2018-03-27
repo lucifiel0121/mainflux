@@ -1,6 +1,7 @@
 package coap
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"strings"
@@ -17,44 +18,51 @@ type AuthProvider interface {
 	CanAccess(string, string) (string, error)
 }
 
-// obsHandle handles observe messages and keeps connection to client in order to send notifications.
-func (ca *AdapterService) obsHandle(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message, offset time.Duration, pub string) broker.MsgHandler {
+// ObsHandle handles observe messages and keeps connection to client in order to send notifications.
+func obsHandle(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message, offset time.Duration) broker.MsgHandler {
+	var counter uint32
+	count := make([]byte, 4)
 	return func(msg *broker.Msg) {
+		if l == nil || a == nil {
+			return
+		}
 		if msg == nil {
-			ca.logger.Log("error", "Got an empty message from NATS")
+			logger.Log("error", "Got an empty message from NATS")
 			return
 		}
 		rawMsg := mainflux.RawMessage{}
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
-			ca.logger.Log("error", fmt.Sprintf("Error converting NATS message to RawMessage %s", err))
+			logger.Log("error", fmt.Sprintf("Error converting NATS message to RawMessage %s", err))
 			return
 		}
-		if rawMsg.Publisher == pub {
-			// Don't notify yourself.
-			return
-		}
+		counter++
+		binary.LittleEndian.PutUint32(count, counter)
 
 		m.Type = gocoap.Confirmable
 		m.Payload = rawMsg.Payload
+		m.Code = gocoap.Content
+
+		m.SetOption(gocoap.Observe, count[:3])
 		m.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 		m.SetOption(gocoap.LocationPath, m.Path())
-		m.Code = gocoap.Content
-		ca.logger.Log("message", fmt.Sprintf("Transmitting %v", msg))
+		logger.Log("message", fmt.Sprintf("Transmitting %v", msg))
 		if err := gocoap.Transmit(l, a, *m); err != nil {
-			ca.logger.Log("error", fmt.Sprintf("Can't notify client %s", err))
+			logger.Log("error", fmt.Sprintf("Can't notify client %s", err))
+			return
 		}
-		buff := []byte{}
+
 		l.SetReadDeadline(time.Now().Add(time.Second * offset))
-		resp, err := receive(l, buff)
+		resp, err := receive(l)
+		logger.Log("message", string(resp.Payload))
 		if err != nil {
-			ca.logger.Log("error", fmt.Sprintf("Got timeout waiting to recieve client answer %s", err))
+			logger.Log("error", fmt.Sprintf("Got error waiting to recieve client answer %s", err))
 			if err := msg.Sub.Unsubscribe(); err != nil {
-				ca.logger.Log("error", err)
+				logger.Log("error", err)
 			}
 		}
 		if resp.Type == gocoap.Reset {
 			if err := teardown(l, msg); err != nil {
-				ca.logger.Log("error", err)
+				logger.Log("error", err)
 			}
 		} else {
 			// Zero time sets deadline to no limit.
@@ -63,12 +71,13 @@ func (ca *AdapterService) obsHandle(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Me
 	}
 }
 
-func receive(l *net.UDPConn, buf []byte) (gocoap.Message, error) {
-	nr, _, err := l.ReadFromUDP(buf)
+func receive(l *net.UDPConn) (gocoap.Message, error) {
+	buff := make([]byte, maxPktLen)
+	nr, _, err := l.ReadFromUDP(buff)
 	if err != nil {
 		return gocoap.Message{}, err
 	}
-	return gocoap.ParseMessage(buf[:nr])
+	return gocoap.ParseMessage(buff[:nr])
 }
 
 func authKey(opt interface{}) (string, error) {
