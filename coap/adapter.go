@@ -122,11 +122,6 @@ func (ca *AdapterService) Observe(auth AuthProvider) MsgHandler {
 			res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 		}
 
-		if len(m.Payload) == 0 && m.IsConfirmable() {
-			res.Code = gocoap.BadRequest
-			return res
-		}
-
 		cid := mux.Var(m, channel)
 		_, err := authorize(m, res, cid, auth)
 		if err != nil {
