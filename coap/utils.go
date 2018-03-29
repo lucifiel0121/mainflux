@@ -39,8 +39,8 @@ func (ca *AdapterService) obsHandle(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		binary.LittleEndian.PutUint32(count, counter)
 
 		msg.Type = gocoap.Confirmable
-		msg.Payload = rawMsg.Payload
 		msg.Code = gocoap.Content
+		msg.Payload = rawMsg.Payload
 
 		msg.SetOption(gocoap.Observe, count[:3])
 		msg.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
@@ -51,7 +51,7 @@ func (ca *AdapterService) obsHandle(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 			return
 		}
 
-		conn.SetReadDeadline(time.Now().Add(time.Second * offset))
+		conn.SetReadDeadline(time.Now().Add(time.Millisecond * offset))
 		resp, err := receive(conn)
 		ca.logger.Log("message", string(resp.Payload))
 		if err != nil {
@@ -59,6 +59,7 @@ func (ca *AdapterService) obsHandle(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 			if err := brokerMsg.Sub.Unsubscribe(); err != nil {
 				ca.logger.Log("error", err)
 			}
+			return
 		}
 		if resp.Type == gocoap.Reset {
 			if err := teardown(conn, brokerMsg); err != nil {
@@ -80,19 +81,19 @@ func receive(l *net.UDPConn) (gocoap.Message, error) {
 	return gocoap.ParseMessage(buff[:nr])
 }
 
-func authKey(opt interface{}) (string, error) {
+func authKey(opt interface{}) (string, gocoap.COAPCode, error) {
 	if opt == nil {
-		return "", errBadRequest
+		return "", gocoap.BadRequest, errBadRequest
 	}
 	val, ok := opt.(string)
 	if !ok {
-		return "", errBadRequest
+		return "", gocoap.BadRequest, errBadRequest
 	}
 	arr := strings.Split(val, "=")
 	if len(arr) != 2 || strings.ToLower(arr[0]) != key {
-		return "", errBadRequest
+		return "", gocoap.BadOption, errBadOption
 	}
-	return arr[1], nil
+	return arr[1], gocoap.Valid, nil
 }
 
 func teardown(conn *net.UDPConn, msg *broker.Msg) error {
@@ -103,10 +104,10 @@ func teardown(conn *net.UDPConn, msg *broker.Msg) error {
 }
 
 func (ca *AdapterService) authorize(msg *gocoap.Message, res *gocoap.Message, cid string) (publisher string, err error) {
-	// Device Key is passed as Uri-Query parameter which option ID is 15 (0xf).
-	key, err := authKey(msg.Option(gocoap.URIQuery))
+	// Device Key is passed as Uri-Query parameter, which option ID is 15 (0xf).
+	key, code, err := authKey(msg.Option(gocoap.URIQuery))
 	if err != nil {
-		res.Code = gocoap.BadRequest
+		res.Code = code
 		return
 	}
 

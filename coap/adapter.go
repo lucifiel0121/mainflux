@@ -36,6 +36,7 @@ const (
 
 var (
 	errBadRequest = errors.New("bad request")
+	errBadOption  = errors.New("bad option")
 )
 
 // AdapterService struct represents CoAP adapter service implementation.
@@ -128,7 +129,7 @@ func (ca *AdapterService) Observe(conn *net.UDPConn, addr *net.UDPAddr, msg *goc
 
 	if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
 		subject := fmt.Sprintf("channel.%s", cid)
-		if _, err := ca.pubSub.Subscribe(subject, ca.obsHandle(conn, addr, msg, 120)); err != nil {
+		if _, err := ca.pubSub.Subscribe(subject, ca.obsHandle(conn, addr, msg, 60000)); err != nil {
 			ca.logger.Log("error", fmt.Sprintf("Error occured during subscription to NATS %s", err))
 			res.Code = gocoap.InternalServerError
 			return res
