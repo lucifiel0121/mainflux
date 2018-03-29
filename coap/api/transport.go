@@ -20,10 +20,10 @@ func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 }
 
 // MakeHandler function return new CoAP server with GET, POST and NOT_FOUND handlers.
-func MakeHandler(svc coap.Service, auth coap.AuthProvider) gocoap.Handler {
+func MakeHandler(svc coap.Service) gocoap.Handler {
 	r := mux.NewRouter()
-	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(svc.Recieve(auth))).Methods(gocoap.POST)
-	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(svc.Observe(auth))).Methods(gocoap.GET)
+	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(svc.Receive)).Methods(gocoap.POST)
+	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(svc.Observe)).Methods(gocoap.GET)
 	r.NotFoundHandler = gocoap.FuncHandler(NotFoundHandler)
 	return r
 }

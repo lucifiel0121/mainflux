@@ -72,14 +72,14 @@ func main() {
 
 	mgr := manager.NewClient(cfg.ManagerURL)
 
-	ca := coap.New(logger, svc)
+	ca := coap.New(logger, svc, mgr)
 
 	errs := make(chan error, 2)
 
 	go func() {
 		coapAddr := fmt.Sprintf(":%d", cfg.Port)
 		logger.Log("message", fmt.Sprintf("CoAP adapter service started, exposed port %d", cfg.Port))
-		errs <- gocoap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca, mgr))
+		errs <- gocoap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca))
 	}()
 
 	go func() {

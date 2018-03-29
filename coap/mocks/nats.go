@@ -1,7 +1,6 @@
 package mocks
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -13,15 +12,13 @@ import (
 
 const prefix = "channel."
 
-var errSubscription = errors.New("Unable to subscribe")
-
 // NatsService represents NATS service mock implementation.
 type NatsService struct {
 	subs map[string][]broker.MsgHandler
 	mu   sync.Mutex
 }
 
-// RegisterSub adds new handler to list of handlers.
+// RegisterSub adds new handler to list of handlers
 func (svc *NatsService) RegisterSub(cid string, cb broker.MsgHandler) (*broker.Subscription, error) {
 	sub := &broker.Subscription{}
 	svc.mu.Lock()
@@ -52,14 +49,10 @@ func NewNatsService() NatsService {
 // NatsClient represents NATS client mock implementation.
 type NatsClient struct {
 	service *NatsService
-	broken  bool
 }
 
 // Subscribe to mock service.
 func (nc NatsClient) Subscribe(cid string, cb broker.MsgHandler) (*broker.Subscription, error) {
-	if nc.broken {
-		return nil, errSubscription
-	}
 	return nc.service.RegisterSub(cid, cb)
 }
 
@@ -75,10 +68,9 @@ func (nc NatsClient) Publish(msg mainflux.RawMessage) error {
 }
 
 // NewNatsClient creates new client.
-func NewNatsClient(ns *NatsService, broken bool) NatsClient {
+func NewNatsClient(ns *NatsService) NatsClient {
 	nc := NatsClient{
 		service: ns,
-		broken:  broken,
 	}
 	return nc
 }

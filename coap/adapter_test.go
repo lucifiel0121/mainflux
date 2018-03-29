@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mainflux/mainflux"
+	"github.com/mainflux/mainflux/coap/mocks"
 
 	"github.com/go-kit/kit/log"
 	"github.com/gogo/protobuf/proto"
@@ -13,8 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	gocoap "github.com/dustin/go-coap"
-	mgr "github.com/mainflux/mainflux/coap/mock/manager"
-	nats "github.com/mainflux/mainflux/coap/mock/nats"
 )
 
 var (
@@ -30,7 +29,7 @@ var (
 		Publisher:   "johndoe",
 		Protocol:    "coap",
 		ContentType: "JSON",
-		Payload:     []byte("Test data"),
+		Payload:     []byte(`{"n":"current","t":22,"v":1.10}`),
 	}
 	brokerMsg = broker.Msg{
 		Reply:   "OK",
@@ -47,12 +46,29 @@ func init() {
 	brokerMsg.Data = data
 }
 
-func NewService() Service {
+func NewService() AdapterService {
 	logger := log.NewNopLogger()
-	nService := nats.NewService()
-	nClient := nats.NewClient(&nService)
-	svc := New(logger, &nClient)
+	nService := mocks.NewNatsService()
+	nClient := mocks.NewNatsClient(&nService)
+	mgrClient := mocks.NewManagerClient("john.doe@email.com")
+	svc := AdapterService{
+		logger: logger,
+		pubSub: &nClient,
+		auth:   &mgrClient,
+	}
 	return svc
+}
+
+func NewUnauthorize() AdapterService {
+	logger := log.NewNopLogger()
+	nService := mocks.NewNatsService()
+	nClient := mocks.NewNatsClient(&nService)
+	mgrClient := mocks.NewManagerClient("")
+	return AdapterService{
+		logger: logger,
+		pubSub: &nClient,
+		auth:   &mgrClient,
+	}
 }
 
 func MakeConn(addr string) (*net.UDPConn, *net.UDPAddr) {
@@ -62,18 +78,17 @@ func MakeConn(addr string) (*net.UDPConn, *net.UDPAddr) {
 }
 
 func TestNotify(t *testing.T) {
-	logger = log.NewNopLogger()
 	svcConn, uaddr := MakeConn("localhost:5683")
 	assert.NotNil(t, svcConn)
 	assert.NotNil(t, uaddr)
 	buff := make([]byte, 1500)
-	handler := obsHandle(svcConn, uaddr, &validMsg, 20)
+	svc := NewService()
+	handler := svc.obsHandle(svcConn, uaddr, &validMsg, 20)
 	// Notification from NATS.
 	go handler(&brokerMsg)
 
-	// Recieve notification message.
+	// Receive notification message.
 	resp, _ := gocoap.Receive(svcConn, buff)
-	t.Log(string(resp.Payload))
 	assert.Equal(t, gocoap.Confirmable, resp.Type)
 	assert.Equal(t, gocoap.Content, resp.Code)
 	assert.Equal(t, rawMessage.Payload, resp.Payload)
@@ -88,37 +103,27 @@ func TestNotify(t *testing.T) {
 
 func TestRequests(t *testing.T) {
 	svc := NewService()
-	mgrClient := mgr.New("john.doe@email.com")
-	recieve := svc.Recieve(mgrClient)
 	m := validMsg
 	m.Code = gocoap.POST
-	resp := recieve(nil, nil, &m)
+	resp := svc.Receive(nil, nil, &m)
 	assert.Equal(t, resp.Type, gocoap.Acknowledgement)
 	assert.Equal(t, resp.Code, gocoap.Changed)
 }
 
 func TestObserve(t *testing.T) {
 	svc := NewService()
-	mgrClient := mgr.New("john.doe@email.com")
-	observe := svc.Observe(mgrClient)
-
 	m := validMsg
 	m.SetOption(gocoap.Observe, 0)
-	resp := observe(nil, nil, &m)
+	resp := svc.Observe(nil, nil, &m)
 	assert.Equal(t, m.Token, resp.Token)
 	assert.Equal(t, resp.Type, gocoap.Acknowledgement)
-	t.Log(resp)
 }
 
 func TestUnauthorized(t *testing.T) {
-	svc := NewService()
-	mgrClient := mgr.New("")
-	recieve := svc.Recieve(mgrClient)
+	svc := NewUnauthorize()
 	m := validMsg
-	resp := recieve(nil, nil, &m)
-	t.Log(resp.Token)
+	resp := svc.Receive(nil, nil, &m)
 	assert.Equal(t, resp.Token, validMsg.Token)
 	assert.Equal(t, resp.Type, gocoap.Acknowledgement)
 	assert.Equal(t, resp.Code, gocoap.Unauthorized)
-	t.Log(resp)
 }
