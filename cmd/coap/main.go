@@ -8,14 +8,12 @@ import (
 
 	gocoap "github.com/dustin/go-coap"
 	"github.com/go-kit/kit/log"
-	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
 	"github.com/mainflux/mainflux"
 	manager "github.com/mainflux/mainflux/manager/client"
 
 	"github.com/mainflux/mainflux/coap"
 	"github.com/mainflux/mainflux/coap/api"
 	"github.com/mainflux/mainflux/coap/nats"
-	stdprometheus "github.com/prometheus/client_golang/prometheus"
 
 	broker "github.com/nats-io/go-nats"
 )
@@ -53,33 +51,31 @@ func main() {
 	defer nc.Close()
 
 	pub := nats.New(nc)
-	svc := api.LoggingMiddleware(pub, logger)
-	svc = api.MetricsMiddleware(
-		svc,
-		kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
-			Namespace: "coap_adapter",
-			Subsystem: "api",
-			Name:      "request_count",
-			Help:      "Number of requests received.",
-		}, []string{"method"}),
-		kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
-			Namespace: "coap_adapter",
-			Subsystem: "api",
-			Name:      "request_latency_microseconds",
-			Help:      "Total duration of requests in microseconds.",
-		}, []string{"method"}),
-	)
+	// svc := api.LoggingMiddleware(pub, logger)
+	// svc = api.MetricsMiddleware(
+	// 	svc,
+	// 	kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
+	// 		Namespace: "coap_adapter",
+	// 		Subsystem: "api",
+	// 		Name:      "request_count",
+	// 		Help:      "Number of requests received.",
+	// 	}, []string{"method"}),
+	// 	kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
+	// 		Namespace: "coap_adapter",
+	// 		Subsystem: "api",
+	// 		Name:      "request_latency_microseconds",
+	// 		Help:      "Total duration of requests in microseconds.",
+	// 	}, []string{"method"}),
+	// )
 
 	mgr := manager.NewClient(cfg.ManagerURL)
-
-	ca := coap.New(logger, svc, mgr)
-
+	ca := coap.New(pub)
 	errs := make(chan error, 2)
 
 	go func() {
 		coapAddr := fmt.Sprintf(":%d", cfg.Port)
 		logger.Log("message", fmt.Sprintf("CoAP adapter service started, exposed port %d", cfg.Port))
-		errs <- gocoap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca))
+		errs <- gocoap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca, mgr))
 	}()
 
 	go func() {

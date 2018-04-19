@@ -49,11 +49,11 @@ func (pub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 
 func (pub *natsPublisher) Subscribe(chanID string, channel coap.Channel) error {
 	var sub *broker.Subscription
+	println("Calling subscribe...")
 	sub, err := pub.nc.Subscribe(fmt.Sprintf("%s.%s", prefix, chanID), func(msg *broker.Msg) {
 		if msg == nil {
 			return
 		}
-
 		var rawMsg mainflux.RawMessage
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
 			return
@@ -61,6 +61,7 @@ func (pub *natsPublisher) Subscribe(chanID string, channel coap.Channel) error {
 		select {
 		case channel.Messages <- rawMsg:
 		case <-channel.Closed:
+			print("unsubscribe...")
 			sub.Unsubscribe()
 			channel.Close()
 		}
