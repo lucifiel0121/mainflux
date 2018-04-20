@@ -25,7 +25,7 @@ type natsPublisher struct {
 	cb *gobreaker.CircuitBreaker
 }
 
-// New instantiates NATS message publisher.
+// New instantiates NATS message pubsub.
 func New(nc *broker.Conn) coap.Service {
 	st := gobreaker.Settings{
 		Name: "NATS",
@@ -38,19 +38,21 @@ func New(nc *broker.Conn) coap.Service {
 	return &natsPublisher{nc, cb}
 }
 
-func (pub *natsPublisher) Publish(msg mainflux.RawMessage) error {
+func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	data, err := proto.Marshal(&msg)
 	if err != nil {
 		return err
 	}
-	subject := fmt.Sprintf("%s.%s", prefix, msg.Channel)
-	return pub.nc.Publish(subject, data)
+	_, err = pubsub.cb.Execute(func() (interface{}, error) {
+		return nil, pubsub.nc.Publish(fmt.Sprintf("%s.%s", prefix, msg.Channel), data)
+	})
+	return err
 }
 
-func (pub *natsPublisher) Subscribe(chanID string, channel coap.Channel) error {
+func (pubsub *natsPublisher) Subscribe(chanID string, channel coap.Channel) error {
 	var sub *broker.Subscription
-	println("Calling subscribe...")
-	sub, err := pub.nc.Subscribe(fmt.Sprintf("%s.%s", prefix, chanID), func(msg *broker.Msg) {
+	println("subscribe...")
+	sub, err := pubsub.nc.Subscribe(fmt.Sprintf("%s.%s", prefix, chanID), func(msg *broker.Msg) {
 		if msg == nil {
 			return
 		}
@@ -58,14 +60,13 @@ func (pub *natsPublisher) Subscribe(chanID string, channel coap.Channel) error {
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
 			return
 		}
-		select {
-		case channel.Messages <- rawMsg:
-		case <-channel.Closed:
-			print("unsubscribe...")
-			sub.Unsubscribe()
-			channel.Close()
-		}
+		channel.Messages <- rawMsg
 	})
-
+	go func() {
+		<-channel.Closed
+		println("closing...")
+		sub.Unsubscribe()
+		channel.Close()
+	}()
 	return err
 }

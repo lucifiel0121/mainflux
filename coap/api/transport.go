@@ -9,7 +9,6 @@ import (
 
 	"github.com/mainflux/mainflux/coap"
 	manager "github.com/mainflux/mainflux/manager/client"
-	broker "github.com/nats-io/go-nats"
 
 	mux "github.com/dereulenspiegel/coap-mux"
 	gocoap "github.com/dustin/go-coap"
@@ -50,8 +49,8 @@ func MakeHandler(svc coap.Service, mgr manager.ManagerClient) gocoap.Handler {
 
 func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
+		println("received POST message ", string(msg.Payload))
 		var res *gocoap.Message
-		println("received message: ", string(msg.Payload))
 		if msg.IsConfirmable() {
 			res = &gocoap.Message{
 				Type:      gocoap.Acknowledgement,
@@ -75,14 +74,14 @@ func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 			return res
 		}
 
-		n := mainflux.RawMessage{
+		rawMsg := mainflux.RawMessage{
 			Channel:   cid,
 			Publisher: publisher,
 			Protocol:  protocol,
 			Payload:   msg.Payload,
 		}
 
-		if err := svc.Publish(n); err != nil {
+		if err := svc.Publish(rawMsg); err != nil {
 			if msg.IsConfirmable() {
 				res.Code = gocoap.InternalServerError
 			}
@@ -118,12 +117,13 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		}
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
 			channel := coap.Channel{make(chan mainflux.RawMessage), make(chan bool)}
+			println("calling subscribe...")
 			if err := svc.Subscribe(cid, channel); err != nil {
-				println(err.Error())
+				println(err)
 				res.Code = gocoap.InternalServerError
 				return res
 			}
-			handleSubscribe(conn, addr, msg, 6000, channel)
+			go handleSubscribe(conn, addr, msg, 60, channel)
 			res.AddOption(gocoap.Observe, 0)
 		}
 		return res
@@ -131,63 +131,54 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 }
 
 func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, offset time.Duration, channel coap.Channel) {
-	go func() {
-		var counter uint32
-		count := make([]byte, 4)
-		for {
-			rawMsg := <-channel.Messages
-			println(string(rawMsg.Payload))
-			counter++
-			binary.LittleEndian.PutUint32(count, counter)
+	var counter uint32
+	count := make([]byte, 4)
+	println("worker started...")
 
-			msg.Type = gocoap.Confirmable
-			msg.Code = gocoap.Content
-			msg.Payload = rawMsg.Payload
+	for {
+		rawMsg := <-channel.Messages
+		println("RAW", string(rawMsg.Payload))
+		counter++
+		binary.LittleEndian.PutUint32(count, counter)
+		msg.Type = gocoap.Confirmable
+		msg.Code = gocoap.Content
+		msg.Payload = rawMsg.Payload
 
-			msg.SetOption(gocoap.Observe, count[:3])
-			msg.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
-			msg.SetOption(gocoap.LocationPath, msg.Path())
-			if err := gocoap.Transmit(conn, addr, *msg); err != nil {
-				println("Trnsmitting error")
-				return
-			}
-			conn.SetReadDeadline(time.Now().Add(time.Millisecond * offset))
-			resp, err := response(conn)
-			if err != nil {
-				print("got errror waiting for clinet to response...")
-				conn.Close()
-				channel.Closed <- true
-				return
-				// 	if err := brokerMsg.Sub.Unsubscribe(); err != nil {
-			}
-			println(resp.Code)
-			// 	return
-			// }
-			// if resp.Type == gocoap.Reset {
-			// 	if err := teardown(conn, brokerMsg); err != nil {
-			// 	}
-			// } else {
-			// Zero time sets deadline to no limit.
-			conn.SetReadDeadline(time.Time{})
+		msg.SetOption(gocoap.Observe, count[:3])
+		msg.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
+		msg.SetOption(gocoap.LocationPath, msg.Path())
+		if err := gocoap.Transmit(conn, addr, *msg); err != nil {
+			println("broken")
+			break
 		}
-	}()
+		conn.SetReadDeadline(time.Now().Add(time.Millisecond * offset))
+		resp, err := response(conn)
+		if err != nil {
+			println("sending close signal...")
+			channel.Closed <- true
+			println("closed sent")
+			return
+		}
+		if resp.Type == gocoap.Reset {
+
+		} else {
+			channel.Closed <- true
+			return
+		}
+		// Zero time sets deadline to no limit.
+		conn.SetReadDeadline(time.Time{})
+	}
+	println("worker finished...")
 }
 
 func response(conn *net.UDPConn) (gocoap.Message, error) {
 	buff := make([]byte, maxPktLen)
 	nr, _, err := conn.ReadFromUDP(buff)
+	conn.SetReadDeadline(time.Time{})
 	if err != nil {
-		conn.Close()
 		return gocoap.Message{}, err
 	}
 	return gocoap.ParseMessage(buff[:nr])
-}
-
-func teardown(conn *net.UDPConn, msg *broker.Msg) error {
-	if err := conn.Close(); err != nil {
-		return err
-	}
-	return msg.Sub.Unsubscribe()
 }
 
 func authKey(opt interface{}) (string, gocoap.COAPCode, error) {

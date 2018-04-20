@@ -17,7 +17,7 @@ var (
 	ErrFailedConnection = errors.New("failed to connect to message broker")
 )
 
-// Service specifies web socket service API.
+// Service specifies coap service API.
 type Service interface {
 	mainflux.MessagePublisher
 	// Subscribes to channel with specified id.

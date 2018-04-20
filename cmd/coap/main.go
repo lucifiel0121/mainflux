@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	gocoap "github.com/dustin/go-coap"
 	"github.com/go-kit/kit/log"
@@ -51,22 +49,6 @@ func main() {
 	defer nc.Close()
 
 	pub := nats.New(nc)
-	// svc := api.LoggingMiddleware(pub, logger)
-	// svc = api.MetricsMiddleware(
-	// 	svc,
-	// 	kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
-	// 		Namespace: "coap_adapter",
-	// 		Subsystem: "api",
-	// 		Name:      "request_count",
-	// 		Help:      "Number of requests received.",
-	// 	}, []string{"method"}),
-	// 	kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
-	// 		Namespace: "coap_adapter",
-	// 		Subsystem: "api",
-	// 		Name:      "request_latency_microseconds",
-	// 		Help:      "Total duration of requests in microseconds.",
-	// 	}, []string{"method"}),
-	// )
 
 	mgr := manager.NewClient(cfg.ManagerURL)
 	ca := coap.New(pub)
@@ -78,11 +60,11 @@ func main() {
 		errs <- gocoap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca, mgr))
 	}()
 
-	go func() {
-		c := make(chan os.Signal)
-		signal.Notify(c, syscall.SIGINT)
-		errs <- fmt.Errorf("%s", <-c)
-	}()
+	// go func() {
+	// 	c := make(chan os.Signal)
+	// 	signal.Notify(c, syscall.SIGINT)
+	// 	errs <- fmt.Errorf("%s", <-c)
+	// }()
 
 	c := <-errs
 	logger.Log("terminated", fmt.Sprintf("Proces exited: %s", c.Error()))
