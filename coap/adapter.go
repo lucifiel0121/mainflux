@@ -2,9 +2,14 @@ package coap
 
 import (
 	"errors"
+	"fmt"
+	"net"
 	"sync"
+	"time"
 
+	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
+	"github.com/mainflux/mainflux/coap/nats"
 	broker "github.com/nats-io/go-nats"
 )
 
@@ -22,16 +27,16 @@ var (
 
 // AdapterService struct represents CoAP adapter service implementation.
 type adapterService struct {
-	pubsub Service
-	Subs   map[string]Subscription
+	pubsub nats.Service
+	Subs   map[string]nats.Observer
 	mu     sync.Mutex
 }
 
 // New creates new CoAP adapter service struct.
-func New(pubsub Service) Service {
+func New(pubsub nats.Service) Service {
 	return &adapterService{
 		pubsub: pubsub,
-		Subs:   make(map[string]Subscription),
+		Subs:   make(map[string]nats.Observer),
 		mu:     sync.Mutex{},
 	}
 }
@@ -48,10 +53,62 @@ func (as *adapterService) Publish(msg mainflux.RawMessage) error {
 	return nil
 }
 
-func (as *adapterService) Subscribe(chanID string, channel Channel) (Subscription, error) {
-	sub, err := as.pubsub.Subscribe(chanID, channel)
+func (as *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.RawMessage) error {
+	sub, err := as.pubsub.Subscribe(chanID, ch)
 	if err != nil {
-		err = ErrFailedSubscription
+		return ErrFailedSubscription
 	}
-	return sub, err
+	as.Subs[clientID] = nats.Observer{
+		Sub:   sub,
+		MsgCh: ch,
+	}
+	return nil
+}
+
+// Handler is a type that handles CoAP messages.
+func handlePacket(l *net.UDPConn, data []byte, u *net.UDPAddr,
+	rh gocoap.Handler) {
+
+	msg, err := gocoap.ParseMessage(data)
+	if err != nil {
+		return
+	}
+
+	rv := rh.ServeCOAP(l, u, &msg)
+	if rv != nil {
+		gocoap.Transmit(l, u, *rv)
+	}
+}
+
+// ListenAndServe binds to the given address and serve requests forever.
+func ListenAndServe(n, addr string, rh gocoap.Handler) error {
+	uaddr, err := net.ResolveUDPAddr(n, addr)
+	if err != nil {
+		return err
+	}
+
+	l, err := net.ListenUDP(n, uaddr)
+	if err != nil {
+		return err
+	}
+
+	return serve(l, rh)
+}
+
+func serve(listener *net.UDPConn, rh gocoap.Handler) error {
+	buf := make([]byte, maxPktLen)
+	for {
+		nr, addr, err := listener.ReadFromUDP(buf)
+		fmt.Printf("received: %d, %s:%d\n", nr, addr.IP, addr.Port)
+		if err != nil {
+			if neterr, ok := err.(net.Error); ok && (neterr.Temporary() || neterr.Timeout()) {
+				time.Sleep(5 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+		tmp := make([]byte, nr)
+		copy(tmp, buf)
+		go handlePacket(listener, tmp, addr, rh)
+	}
 }

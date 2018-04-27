@@ -8,7 +8,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mainflux/mainflux"
-	"github.com/mainflux/mainflux/coap"
 	broker "github.com/nats-io/go-nats"
 )
 
@@ -26,7 +25,7 @@ type natsPublisher struct {
 }
 
 // New instantiates NATS message pubsub.
-func New(nc *broker.Conn) coap.Service {
+func New(nc *broker.Conn) Service {
 	st := gobreaker.Settings{
 		Name: "NATS",
 		ReadyToTrip: func(counts gobreaker.Counts) bool {
@@ -49,7 +48,7 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	return err
 }
 
-func (pubsub *natsPublisher) Subscribe(chanID string, channel coap.Channel) (coap.Subscription, error) {
+func (pubsub *natsPublisher) Subscribe(chanID string, ch chan mainflux.RawMessage) (Subscription, error) {
 	var sub *broker.Subscription
 	println("subscribe...")
 	sub, err := pubsub.nc.Subscribe(fmt.Sprintf("%s.%s", prefix, chanID), func(msg *broker.Msg) {
@@ -60,15 +59,15 @@ func (pubsub *natsPublisher) Subscribe(chanID string, channel coap.Channel) (coa
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
 			return
 		}
-		channel.Messages <- rawMsg
+		ch <- rawMsg
 	})
-	if err != nil {
-		go func() {
-			<-channel.Closed
-			println("closing...")
-			sub.Unsubscribe()
-			channel.Close()
-		}()
-	}
+	// if err != nil {
+	// 	go func() {
+	// 		<-channel.Closed
+	// 		println("closing...")
+	// 		sub.Unsubscribe()
+	// 		channel.Close()
+	// 	}()
+	// }
 	return sub, err
 }

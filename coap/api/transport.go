@@ -115,26 +115,27 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 			return res
 		}
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
-			channel := coap.Channel{make(chan mainflux.RawMessage), make(chan bool)}
+			// channel := coap.Channel{make(chan mainflux.RawMessage), make(chan bool)}
 			println("calling subscribe...")
-			if _, err := svc.Subscribe(cid, channel); err != nil {
+			ch := make(chan mainflux.RawMessage)
+			if err := svc.Subscribe(cid, "", ch); err != nil {
 				println(err)
 				res.Code = gocoap.InternalServerError
 				return res
 			}
-			go handleSubscribe(conn, addr, msg, 60, channel)
+			go handleSubscribe(conn, addr, msg, 60, ch)
 			res.AddOption(gocoap.Observe, 0)
 		}
 		return res
 	}
 }
 
-func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, offset time.Duration, channel coap.Channel) {
+func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, offset time.Duration, ch chan mainflux.RawMessage) {
 	var counter uint32
 	count := make([]byte, 4)
 
 	for {
-		rawMsg := <-channel.Messages
+		rawMsg := <-ch
 		println("RAW", string(rawMsg.Payload))
 		counter++
 		binary.LittleEndian.PutUint32(count, counter)
