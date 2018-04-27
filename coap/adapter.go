@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"time"
 
 	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
@@ -18,6 +17,7 @@ const (
 	channel   string = "id"
 	protocol  string = "coap"
 	maxPktLen int    = 1500
+	network          = "udp"
 )
 
 var (
@@ -39,6 +39,14 @@ func New(pubsub nats.Service) Service {
 		Subs:   make(map[string]nats.Observer),
 		mu:     sync.Mutex{},
 	}
+}
+
+func (as *adapterService) Unsubscribe(addr *net.UDPAddr, msg *gocoap.Message) error {
+	id := fmt.Sprintf("%s:%d-%x", addr.IP, addr.Port, msg.Token)
+	obs := as.Subs[id]
+	obs.Sub.Unsubscribe()
+	close(obs.MsgCh)
+	return nil
 }
 
 func (as *adapterService) Publish(msg mainflux.RawMessage) error {
@@ -65,50 +73,22 @@ func (as *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.Ra
 	return nil
 }
 
-// Handler is a type that handles CoAP messages.
-func handlePacket(l *net.UDPConn, data []byte, u *net.UDPAddr,
-	rh gocoap.Handler) {
+func (as *adapterService) serve(conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh gocoap.Handler) {
 
 	msg, err := gocoap.ParseMessage(data)
 	if err != nil {
 		return
 	}
-
-	rv := rh.ServeCOAP(l, u, &msg)
-	if rv != nil {
-		gocoap.Transmit(l, u, *rv)
+	var respMsg *gocoap.Message
+	switch msg.Type {
+	case gocoap.Reset:
+		as.Unsubscribe(addr, &msg)
+		respMsg = &msg
+		respMsg.Type = gocoap.Acknowledgement
+	default:
+		respMsg = rh.ServeCOAP(conn, addr, &msg)
 	}
-}
-
-// ListenAndServe binds to the given address and serve requests forever.
-func ListenAndServe(n, addr string, rh gocoap.Handler) error {
-	uaddr, err := net.ResolveUDPAddr(n, addr)
-	if err != nil {
-		return err
-	}
-
-	l, err := net.ListenUDP(n, uaddr)
-	if err != nil {
-		return err
-	}
-
-	return serve(l, rh)
-}
-
-func serve(listener *net.UDPConn, rh gocoap.Handler) error {
-	buf := make([]byte, maxPktLen)
-	for {
-		nr, addr, err := listener.ReadFromUDP(buf)
-		fmt.Printf("received: %d, %s:%d\n", nr, addr.IP, addr.Port)
-		if err != nil {
-			if neterr, ok := err.(net.Error); ok && (neterr.Temporary() || neterr.Timeout()) {
-				time.Sleep(5 * time.Millisecond)
-				continue
-			}
-			return err
-		}
-		tmp := make([]byte, nr)
-		copy(tmp, buf)
-		go handlePacket(listener, tmp, addr, rh)
+	if respMsg != nil {
+		gocoap.Transmit(conn, addr, *respMsg)
 	}
 }

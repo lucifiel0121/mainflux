@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -108,6 +109,13 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 			res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 		}
 
+		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 1 {
+			err := svc.Unsubscribe(addr, msg)
+			if err != nil {
+				return res
+			}
+		}
+
 		cid := mux.Var(msg, "id")
 		_, err := authorize(msg, res, cid)
 		if err != nil {
@@ -115,10 +123,11 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 			return res
 		}
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
-			// channel := coap.Channel{make(chan mainflux.RawMessage), make(chan bool)}
 			println("calling subscribe...")
 			ch := make(chan mainflux.RawMessage)
-			if err := svc.Subscribe(cid, "", ch); err != nil {
+			id := fmt.Sprintf("%s:%d-%x", addr.IP, addr.Port, msg.Token)
+			fmt.Printf("Formed id: %s\n", id)
+			if err := svc.Subscribe(cid, id, ch); err != nil {
 				println(err)
 				res.Code = gocoap.InternalServerError
 				return res
@@ -135,7 +144,10 @@ func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, 
 	count := make([]byte, 4)
 
 	for {
-		rawMsg := <-ch
+		rawMsg, ok := <-ch
+		if !ok {
+			break
+		}
 		println("RAW", string(rawMsg.Payload))
 		counter++
 		binary.LittleEndian.PutUint32(count, counter)
@@ -147,8 +159,8 @@ func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, 
 		msg.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 		msg.SetOption(gocoap.LocationPath, msg.Path())
 		if err := gocoap.Transmit(conn, addr, *msg); err != nil {
-			println("broken")
 			break
+			// TODO: try multiple transmits, return if not didn't succeed.
 		}
 	}
 	println("worker finished...")
