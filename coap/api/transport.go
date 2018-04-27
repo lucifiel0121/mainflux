@@ -41,21 +41,14 @@ func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 func MakeHandler(svc coap.Service, mgr manager.ManagerClient) gocoap.Handler {
 	auth = mgr
 	r := mux.NewRouter()
-	r.Handle("", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
 	r.NotFoundHandler = gocoap.FuncHandler(NotFoundHandler)
 	return r
 }
 
-func response(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
-	println(msg.Type)
-	return msg
-}
-
 func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
-		println("received POST message ", string(msg.Payload))
 		var res *gocoap.Message
 		if msg.IsConfirmable() {
 			res = &gocoap.Message{
@@ -124,7 +117,7 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
 			channel := coap.Channel{make(chan mainflux.RawMessage), make(chan bool)}
 			println("calling subscribe...")
-			if err := svc.Subscribe(cid, channel); err != nil {
+			if _, err := svc.Subscribe(cid, channel); err != nil {
 				println(err)
 				res.Code = gocoap.InternalServerError
 				return res
@@ -139,7 +132,6 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, offset time.Duration, channel coap.Channel) {
 	var counter uint32
 	count := make([]byte, 4)
-	println("worker started...")
 
 	for {
 		rawMsg := <-channel.Messages
@@ -157,22 +149,6 @@ func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, 
 			println("broken")
 			break
 		}
-		// 	conn.SetReadDeadline(time.Now().Add(time.Millisecond * offset))
-		// 	resp, err := response(conn)
-		// 	if err != nil {
-		// 		println("sending close signal...")
-		// 		channel.Closed <- true
-		// 		println("closed sent")
-		// 		return
-		// 	}
-		// 	if resp.Type == gocoap.Reset {
-
-		// 	} else {
-		// 		channel.Closed <- true
-		// 		return
-		// 	}
-		// 	// Zero time sets deadline to no limit.
-		// 	conn.SetReadDeadline(time.Time{})
 	}
 	println("worker finished...")
 }

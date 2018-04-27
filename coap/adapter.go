@@ -2,15 +2,11 @@ package coap
 
 import (
 	"errors"
-	"net"
+	"sync"
 
-	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
 	broker "github.com/nats-io/go-nats"
 )
-
-// MsgHandler handles messages CoAP server recieved.
-type MsgHandler func(*net.UDPConn, *net.UDPAddr, *gocoap.Message) *gocoap.Message
 
 const (
 	key       string = "key"
@@ -27,11 +23,17 @@ var (
 // AdapterService struct represents CoAP adapter service implementation.
 type adapterService struct {
 	pubsub Service
+	Subs   map[string]Subscription
+	mu     sync.Mutex
 }
 
 // New creates new CoAP adapter service struct.
 func New(pubsub Service) Service {
-	return &adapterService{pubsub}
+	return &adapterService{
+		pubsub: pubsub,
+		Subs:   make(map[string]Subscription),
+		mu:     sync.Mutex{},
+	}
 }
 
 func (as *adapterService) Publish(msg mainflux.RawMessage) error {
@@ -46,9 +48,10 @@ func (as *adapterService) Publish(msg mainflux.RawMessage) error {
 	return nil
 }
 
-func (as *adapterService) Subscribe(chanID string, channel Channel) error {
-	if err := as.pubsub.Subscribe(chanID, channel); err != nil {
-		return ErrFailedSubscription
+func (as *adapterService) Subscribe(chanID string, channel Channel) (Subscription, error) {
+	sub, err := as.pubsub.Subscribe(chanID, channel)
+	if err != nil {
+		err = ErrFailedSubscription
 	}
-	return nil
+	return sub, err
 }

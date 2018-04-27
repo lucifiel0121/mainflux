@@ -2,6 +2,7 @@ package coap
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -20,11 +21,22 @@ var (
 	ErrFailedConnection = errors.New("failed to connect to message broker")
 )
 
+// Subscription interface represents subscription to messaging system.
+type Subscription interface {
+	Unsubscribe() error
+}
+
+// Observer struct represents observer of CoAP messages.
+type Observer struct {
+	sub   Subscription
+	msgCh chan mainflux.RawMessage
+}
+
 // Service specifies coap service API.
 type Service interface {
 	mainflux.MessagePublisher
 	// Subscribes to channel with specified id.
-	Subscribe(string, Channel) error
+	Subscribe(string, Channel) (Subscription, error)
 }
 
 // Channel is used for receiving and sending messages.
@@ -93,15 +105,14 @@ func ListenAndServe(n, addr string, rh gocoap.Handler) error {
 		return err
 	}
 
-	return Serve(l, rh)
+	return serve(l, rh)
 }
 
-// Serve processes incoming UDP packets on the given listener, and processes
-// these requests forever (or until the listener is closed).
-func Serve(listener *net.UDPConn, rh gocoap.Handler) error {
+func serve(listener *net.UDPConn, rh gocoap.Handler) error {
 	buf := make([]byte, maxPktLen)
 	for {
 		nr, addr, err := listener.ReadFromUDP(buf)
+		fmt.Printf("received: %d, %s:%d\n", nr, addr.IP, addr.Port)
 		if err != nil {
 			if neterr, ok := err.(net.Error); ok && (neterr.Temporary() || neterr.Timeout()) {
 				time.Sleep(5 * time.Millisecond)

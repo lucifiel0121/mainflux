@@ -49,7 +49,7 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	return err
 }
 
-func (pubsub *natsPublisher) Subscribe(chanID string, channel coap.Channel) error {
+func (pubsub *natsPublisher) Subscribe(chanID string, channel coap.Channel) (coap.Subscription, error) {
 	var sub *broker.Subscription
 	println("subscribe...")
 	sub, err := pubsub.nc.Subscribe(fmt.Sprintf("%s.%s", prefix, chanID), func(msg *broker.Msg) {
@@ -62,11 +62,13 @@ func (pubsub *natsPublisher) Subscribe(chanID string, channel coap.Channel) erro
 		}
 		channel.Messages <- rawMsg
 	})
-	go func() {
-		<-channel.Closed
-		println("closing...")
-		sub.Unsubscribe()
-		channel.Close()
-	}()
-	return err
+	if err != nil {
+		go func() {
+			<-channel.Closed
+			println("closing...")
+			sub.Unsubscribe()
+			channel.Close()
+		}()
+	}
+	return sub, err
 }
