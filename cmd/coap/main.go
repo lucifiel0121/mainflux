@@ -3,8 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
-	gocoap "github.com/dustin/go-coap"
 	"github.com/go-kit/kit/log"
 	"github.com/mainflux/mainflux"
 	manager "github.com/mainflux/mainflux/manager/client"
@@ -57,14 +58,14 @@ func main() {
 	go func() {
 		coapAddr := fmt.Sprintf(":%d", cfg.Port)
 		logger.Log("message", fmt.Sprintf("CoAP adapter service started, exposed port %d", cfg.Port))
-		errs <- gocoap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca, mgr))
+		errs <- coap.ListenAndServe("udp", coapAddr, api.MakeHandler(ca, mgr))
 	}()
 
-	// go func() {
-	// 	c := make(chan os.Signal)
-	// 	signal.Notify(c, syscall.SIGINT)
-	// 	errs <- fmt.Errorf("%s", <-c)
-	// }()
+	go func() {
+		c := make(chan os.Signal)
+		signal.Notify(c, syscall.SIGINT)
+		errs <- fmt.Errorf("%s", <-c)
+	}()
 
 	c := <-errs
 	logger.Log("terminated", fmt.Sprintf("Proces exited: %s", c.Error()))

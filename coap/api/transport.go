@@ -41,10 +41,16 @@ func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 func MakeHandler(svc coap.Service, mgr manager.ManagerClient) gocoap.Handler {
 	auth = mgr
 	r := mux.NewRouter()
+	r.Handle("", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
 	r.NotFoundHandler = gocoap.FuncHandler(NotFoundHandler)
 	return r
+}
+
+func response(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
+	println(msg.Type)
+	return msg
 }
 
 func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
@@ -151,34 +157,24 @@ func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, 
 			println("broken")
 			break
 		}
-		conn.SetReadDeadline(time.Now().Add(time.Millisecond * offset))
-		resp, err := response(conn)
-		if err != nil {
-			println("sending close signal...")
-			channel.Closed <- true
-			println("closed sent")
-			return
-		}
-		if resp.Type == gocoap.Reset {
+		// 	conn.SetReadDeadline(time.Now().Add(time.Millisecond * offset))
+		// 	resp, err := response(conn)
+		// 	if err != nil {
+		// 		println("sending close signal...")
+		// 		channel.Closed <- true
+		// 		println("closed sent")
+		// 		return
+		// 	}
+		// 	if resp.Type == gocoap.Reset {
 
-		} else {
-			channel.Closed <- true
-			return
-		}
-		// Zero time sets deadline to no limit.
-		conn.SetReadDeadline(time.Time{})
+		// 	} else {
+		// 		channel.Closed <- true
+		// 		return
+		// 	}
+		// 	// Zero time sets deadline to no limit.
+		// 	conn.SetReadDeadline(time.Time{})
 	}
 	println("worker finished...")
-}
-
-func response(conn *net.UDPConn) (gocoap.Message, error) {
-	buff := make([]byte, maxPktLen)
-	nr, _, err := conn.ReadFromUDP(buff)
-	conn.SetReadDeadline(time.Time{})
-	if err != nil {
-		return gocoap.Message{}, err
-	}
-	return gocoap.ParseMessage(buff[:nr])
 }
 
 func authKey(opt interface{}) (string, gocoap.COAPCode, error) {
