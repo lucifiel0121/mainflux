@@ -2,9 +2,7 @@ package coap
 
 import (
 	"errors"
-	"net"
 
-	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
 )
 
@@ -26,5 +24,5 @@ type Service interface {
 	// service map of subscriptions under given ID.
 	Subscribe(string, string, chan mainflux.RawMessage) error
 	// Unsubscribe method is used to stop observing resource.
-	Unsubscribe(addr *net.UDPAddr, msg *gocoap.Message) error
+	Unsubscribe(string) error
 }

@@ -3,10 +3,8 @@ package coap
 import (
 	"errors"
 	"fmt"
-	"net"
 	"sync"
 
-	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/coap/nats"
 	broker "github.com/nats-io/go-nats"
@@ -41,21 +39,6 @@ func New(pubsub nats.Service) Service {
 	}
 }
 
-func (svc *adapterService) Unsubscribe(addr *net.UDPAddr, msg *gocoap.Message) error {
-	id := fmt.Sprintf("%s:%d-%x", addr.IP, addr.Port, msg.Token)
-	obs, ok := svc.Subs[id]
-	if !ok {
-		return nil
-	}
-	err := obs.Sub.Unsubscribe()
-	if err != nil {
-		return err
-	}
-	delete(svc.Subs, id)
-	close(obs.MsgCh)
-	return nil
-}
-
 func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 	if err := svc.pubsub.Publish(msg); err != nil {
 		switch err {
@@ -73,9 +56,29 @@ func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.R
 	if err != nil {
 		return ErrFailedSubscription
 	}
+	svc.mu.Lock()
 	svc.Subs[clientID] = nats.Observer{
 		Sub:   sub,
 		MsgCh: ch,
 	}
+	svc.mu.Unlock()
+	return nil
+}
+
+func (svc *adapterService) Unsubscribe(id string) error {
+	obs, ok := svc.Subs[id]
+	fmt.Println("Unsubscribing...")
+	if !ok {
+		return nil
+	}
+	err := obs.Sub.Unsubscribe()
+	if err != nil {
+		return err
+	}
+	svc.mu.Lock()
+	delete(svc.Subs, id)
+	svc.mu.Unlock()
+	close(obs.MsgCh)
+	fmt.Println("Unsubscribed...")
 	return nil
 }

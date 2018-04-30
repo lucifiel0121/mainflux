@@ -50,7 +50,6 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 
 func (pubsub *natsPublisher) Subscribe(chanID string, ch chan mainflux.RawMessage) (Subscription, error) {
 	var sub *broker.Subscription
-	println("subscribe...")
 	sub, err := pubsub.nc.Subscribe(fmt.Sprintf("%s.%s", prefix, chanID), func(msg *broker.Msg) {
 		if msg == nil {
 			return
@@ -61,13 +60,5 @@ func (pubsub *natsPublisher) Subscribe(chanID string, ch chan mainflux.RawMessag
 		}
 		ch <- rawMsg
 	})
-	// if err != nil {
-	// 	go func() {
-	// 		<-channel.Closed
-	// 		println("closing...")
-	// 		sub.Unsubscribe()
-	// 		channel.Close()
-	// 	}()
-	// }
 	return sub, err
 }

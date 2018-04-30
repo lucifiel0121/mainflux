@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/mainflux/mainflux/coap"
@@ -39,8 +38,8 @@ func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 }
 
 // MakeHandler function return new CoAP server with GET, POST and NOT_FOUND handlers.
-func MakeHandler(svc coap.Service, mgr manager.ManagerClient) gocoap.Handler {
-	auth = mgr
+func MakeHandler(svc coap.Service) gocoap.Handler {
+	// auth = mgr
 	r := mux.NewRouter()
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
@@ -68,7 +67,7 @@ func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		}
 
 		cid := mux.Var(msg, "id")
-		publisher, err := authorize(msg, res, cid)
+		publisher, err := coap.Authorize(msg, res, cid)
 		if err != nil {
 			print(err.Error())
 			return res
@@ -109,94 +108,87 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 			res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 		}
 
+		cid := mux.Var(msg, "id")
+		publisher, err := coap.Authorize(msg, res, cid)
+
+		if err != nil {
+			print(err.Error())
+			return res
+		}
+
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 1 {
-			err := svc.Unsubscribe(addr, msg)
+			println("unsub")
+			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
+			err := svc.Unsubscribe(id)
 			if err != nil {
 				return res
 			}
 		}
 
-		cid := mux.Var(msg, "id")
-		_, err := authorize(msg, res, cid)
-		if err != nil {
-			print(err.Error())
-			return res
-		}
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
 			println("calling subscribe...")
 			ch := make(chan mainflux.RawMessage)
-			id := fmt.Sprintf("%s:%d-%x", addr.IP, addr.Port, msg.Token)
-			fmt.Printf("Formed id: %s\n", id)
+			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
 			if err := svc.Subscribe(cid, id, ch); err != nil {
 				println(err)
 				res.Code = gocoap.InternalServerError
 				return res
 			}
-			go handleSubscribe(conn, addr, msg, 60, ch)
+			go handleSub(conn, addr, msg, ch)
 			res.AddOption(gocoap.Observe, 0)
 		}
 		return res
 	}
 }
 
-func handleSubscribe(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, offset time.Duration, ch chan mainflux.RawMessage) {
-	var counter uint32
-	count := make([]byte, 4)
+func notify(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint32, count *[]byte) {
+	*counter++
+	binary.LittleEndian.PutUint32(*count, *counter)
 
-	for {
-		rawMsg, ok := <-ch
-		if !ok {
-			break
-		}
-		println("RAW", string(rawMsg.Payload))
-		counter++
-		binary.LittleEndian.PutUint32(count, counter)
-		msg.Type = gocoap.Confirmable
-		msg.Code = gocoap.Content
-		msg.Payload = rawMsg.Payload
-
-		msg.SetOption(gocoap.Observe, count[:3])
-		msg.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
-		msg.SetOption(gocoap.LocationPath, msg.Path())
+	msg.SetOption(gocoap.Observe, (*count)[:3])
+	for i := 0; i < 3; i++ {
 		if err := gocoap.Transmit(conn, addr, *msg); err != nil {
-			break
-			// TODO: try multiple transmits, return if not didn't succeed.
+			time.Sleep(5 * time.Millisecond)
+			continue
 		}
-	}
-	println("worker finished...")
-}
-
-func authKey(opt interface{}) (string, gocoap.COAPCode, error) {
-	if opt == nil {
-		return "", gocoap.BadRequest, errBadRequest
-	}
-	val, ok := opt.(string)
-	if !ok {
-		return "", gocoap.BadRequest, errBadRequest
-	}
-	arr := strings.Split(val, "=")
-	if len(arr) != 2 || strings.ToLower(arr[0]) != "key" {
-		return "", gocoap.BadOption, errBadOption
-	}
-	return arr[1], gocoap.Valid, nil
-}
-
-func authorize(msg *gocoap.Message, res *gocoap.Message, cid string) (publisher string, err error) {
-	// Device Key is passed as Uri-Query parameter, which option ID is 15 (0xf).
-	key, code, err := authKey(msg.Option(gocoap.URIQuery))
-	if err != nil {
-		res.Code = code
 		return
 	}
+}
 
-	publisher, err = auth.CanAccess(cid, key)
-	if err != nil {
-		switch err {
-		case manager.ErrServiceUnreachable:
-			res.Code = gocoap.ServiceUnavailable
-		default:
-			res.Code = gocoap.Unauthorized
-		}
+func handleSub(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
+	var counter uint32
+	count := make([]byte, 4)
+	ticker := time.NewTicker(24 * time.Hour)
+	res := &gocoap.Message{
+		Type:      gocoap.NonConfirmable,
+		Code:      gocoap.Content,
+		MessageID: msg.MessageID,
+		Token:     msg.Token,
+		Payload:   []byte{},
 	}
-	return
+	res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
+	res.SetOption(gocoap.LocationPath, msg.Path())
+
+	func() {
+		for {
+			select {
+			case <-ticker.C:
+				println("Ticker...")
+				res.Type = gocoap.Confirmable
+				notify(conn, addr, res, &counter, &count)
+			case rawMsg, ok := <-ch:
+				if !ok {
+					return
+				}
+				res.Type = gocoap.NonConfirmable
+				res.Payload = rawMsg.Payload
+				println("RAW", string(rawMsg.Payload))
+				notify(conn, addr, res, &counter, &count)
+				println("Counter: ", counter)
+			}
+		}
+	}()
+	ticker.Stop()
+
+	println("worker finished...")
 }
