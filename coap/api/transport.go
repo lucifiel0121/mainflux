@@ -134,28 +134,30 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 				res.Code = gocoap.InternalServerError
 				return res
 			}
-			go handleSub(conn, addr, msg, ch)
+			go handleSub(svc, id, conn, addr, msg, ch)
 			res.AddOption(gocoap.Observe, 0)
 		}
 		return res
 	}
 }
 
-func notify(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint32, count *[]byte) {
+func notify(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint32, count *[]byte) error {
 	*counter++
 	binary.LittleEndian.PutUint32(*count, *counter)
 
 	msg.SetOption(gocoap.Observe, (*count)[:3])
 	for i := 0; i < 3; i++ {
-		if err := gocoap.Transmit(conn, addr, *msg); err != nil {
+		err := gocoap.Transmit(conn, addr, *msg)
+		if err != nil {
 			time.Sleep(5 * time.Millisecond)
 			continue
 		}
-		return
+		return err
 	}
+	return nil
 }
 
-func handleSub(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
+func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
 	var counter uint32
 	count := make([]byte, 4)
 	ticker := time.NewTicker(24 * time.Hour)
@@ -173,9 +175,12 @@ func handleSub(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch cha
 		for {
 			select {
 			case <-ticker.C:
-				println("Ticker...")
 				res.Type = gocoap.Confirmable
-				notify(conn, addr, res, &counter, &count)
+				err := notify(conn, addr, res, &counter, &count)
+				if err != nil {
+					svc.Unsubscribe(id)
+					return
+				}
 			case rawMsg, ok := <-ch:
 				if !ok {
 					return
@@ -183,8 +188,11 @@ func handleSub(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch cha
 				res.Type = gocoap.NonConfirmable
 				res.Payload = rawMsg.Payload
 				println("RAW", string(rawMsg.Payload))
-				notify(conn, addr, res, &counter, &count)
-				println("Counter: ", counter)
+				err := notify(conn, addr, res, &counter, &count)
+				if err != nil {
+					svc.Unsubscribe(id)
+					return
+				}
 			}
 		}
 	}()

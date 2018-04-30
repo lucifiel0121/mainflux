@@ -91,7 +91,6 @@ func ListenAndServe(svc Service, mgr manager.ManagerClient, addr string, rh goco
 	buf := make([]byte, maxPktLen)
 	for {
 		nr, addr, err := conn.ReadFromUDP(buf)
-		fmt.Printf("received: %d, %s:%d\n", nr, addr.IP, addr.Port)
 		if err != nil {
 			if neterr, ok := err.(net.Error); ok && (neterr.Temporary() || neterr.Timeout()) {
 				time.Sleep(5 * time.Millisecond)
