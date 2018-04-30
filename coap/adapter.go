@@ -2,7 +2,6 @@ package coap
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/mainflux/mainflux"
@@ -56,6 +55,10 @@ func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.R
 	if err != nil {
 		return ErrFailedSubscription
 	}
+	// Remove if entry already exists.
+	if _, ok := svc.Subs[clientID]; ok == true {
+		svc.Unsubscribe(clientID)
+	}
 	svc.mu.Lock()
 	svc.Subs[clientID] = nats.Observer{
 		Sub:   sub,
@@ -67,7 +70,6 @@ func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.R
 
 func (svc *adapterService) Unsubscribe(id string) error {
 	obs, ok := svc.Subs[id]
-	fmt.Println("Unsubscribing...")
 	if !ok {
 		return nil
 	}
@@ -79,6 +81,5 @@ func (svc *adapterService) Unsubscribe(id string) error {
 	delete(svc.Subs, id)
 	svc.mu.Unlock()
 	close(obs.MsgCh)
-	fmt.Println("Unsubscribed...")
 	return nil
 }

@@ -69,7 +69,7 @@ func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		cid := mux.Var(msg, "id")
 		publisher, err := coap.Authorize(msg, res, cid)
 		if err != nil {
-			print(err.Error())
+			res.Code = gocoap.Unauthorized
 			return res
 		}
 
@@ -112,25 +112,22 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		publisher, err := coap.Authorize(msg, res, cid)
 
 		if err != nil {
-			print(err.Error())
+			res.Code = gocoap.Unauthorized
 			return res
 		}
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 1 {
-			println("unsub")
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
 			err := svc.Unsubscribe(id)
 			if err != nil {
-				return res
+				res.Code = gocoap.InternalServerError
 			}
 		}
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
-			println("calling subscribe...")
 			ch := make(chan mainflux.RawMessage)
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
 			if err := svc.Subscribe(cid, id, ch); err != nil {
-				println(err)
 				res.Code = gocoap.InternalServerError
 				return res
 			}
@@ -141,20 +138,28 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 	}
 }
 
-func notify(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint32, count *[]byte) error {
+func notify(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint32, count *[]byte) error {
+	err := sendMessage(conn, addr, msg, counter, count)
+	if err != nil {
+		return svc.Unsubscribe(id)
+	}
+	return nil
+}
+
+func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint32, count *[]byte) error {
 	*counter++
 	binary.LittleEndian.PutUint32(*count, *counter)
-
 	msg.SetOption(gocoap.Observe, (*count)[:3])
+	var err error
 	for i := 0; i < 3; i++ {
-		err := gocoap.Transmit(conn, addr, *msg)
+		err = gocoap.Transmit(conn, addr, *msg)
 		if err != nil {
 			time.Sleep(5 * time.Millisecond)
 			continue
 		}
-		return err
+		return nil
 	}
-	return nil
+	return err
 }
 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
@@ -176,9 +181,7 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 			select {
 			case <-ticker.C:
 				res.Type = gocoap.Confirmable
-				err := notify(conn, addr, res, &counter, &count)
-				if err != nil {
-					svc.Unsubscribe(id)
+				if err := notify(svc, id, conn, addr, res, &counter, &count); err != nil {
 					return
 				}
 			case rawMsg, ok := <-ch:
@@ -187,16 +190,12 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 				}
 				res.Type = gocoap.NonConfirmable
 				res.Payload = rawMsg.Payload
-				println("RAW", string(rawMsg.Payload))
-				err := notify(conn, addr, res, &counter, &count)
-				if err != nil {
-					svc.Unsubscribe(id)
+				if err := notify(svc, id, conn, addr, res, &counter, &count); err != nil {
 					return
 				}
 			}
 		}
 	}()
 	ticker.Stop()
-
 	println("worker finished...")
 }
