@@ -41,16 +41,23 @@ func New(pubsub nats.Service) Service {
 	}
 }
 
-func (as *adapterService) Unsubscribe(addr *net.UDPAddr, msg *gocoap.Message) error {
+func (svc *adapterService) Unsubscribe(addr *net.UDPAddr, msg *gocoap.Message) error {
 	id := fmt.Sprintf("%s:%d-%x", addr.IP, addr.Port, msg.Token)
-	obs := as.Subs[id]
-	obs.Sub.Unsubscribe()
+	obs, ok := svc.Subs[id]
+	if !ok {
+		return nil
+	}
+	err := obs.Sub.Unsubscribe()
+	if err != nil {
+		return err
+	}
+	delete(svc.Subs, id)
 	close(obs.MsgCh)
 	return nil
 }
 
-func (as *adapterService) Publish(msg mainflux.RawMessage) error {
-	if err := as.pubsub.Publish(msg); err != nil {
+func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
+	if err := svc.pubsub.Publish(msg); err != nil {
 		switch err {
 		case broker.ErrConnectionClosed, broker.ErrInvalidConnection:
 			return ErrFailedConnection
@@ -61,34 +68,14 @@ func (as *adapterService) Publish(msg mainflux.RawMessage) error {
 	return nil
 }
 
-func (as *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.RawMessage) error {
-	sub, err := as.pubsub.Subscribe(chanID, ch)
+func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.RawMessage) error {
+	sub, err := svc.pubsub.Subscribe(chanID, ch)
 	if err != nil {
 		return ErrFailedSubscription
 	}
-	as.Subs[clientID] = nats.Observer{
+	svc.Subs[clientID] = nats.Observer{
 		Sub:   sub,
 		MsgCh: ch,
 	}
 	return nil
-}
-
-func (as *adapterService) serve(conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh gocoap.Handler) {
-
-	msg, err := gocoap.ParseMessage(data)
-	if err != nil {
-		return
-	}
-	var respMsg *gocoap.Message
-	switch msg.Type {
-	case gocoap.Reset:
-		as.Unsubscribe(addr, &msg)
-		respMsg = &msg
-		respMsg.Type = gocoap.Acknowledgement
-	default:
-		respMsg = rh.ServeCOAP(conn, addr, &msg)
-	}
-	if respMsg != nil {
-		gocoap.Transmit(conn, addr, *respMsg)
-	}
 }

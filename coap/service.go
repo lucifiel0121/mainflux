@@ -27,5 +27,4 @@ type Service interface {
 	Subscribe(string, string, chan mainflux.RawMessage) error
 	// Unsubscribe method is used to stop observing resource.
 	Unsubscribe(addr *net.UDPAddr, msg *gocoap.Message) error
-	serve(conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh gocoap.Handler)
 }

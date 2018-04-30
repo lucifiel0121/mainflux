@@ -8,6 +8,25 @@ import (
 	gocoap "github.com/dustin/go-coap"
 )
 
+func serve(svc Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh gocoap.Handler) {
+	msg, err := gocoap.ParseMessage(data)
+	if err != nil {
+		return
+	}
+	var respMsg *gocoap.Message
+	switch msg.Type {
+	case gocoap.Reset:
+		svc.Unsubscribe(addr, &msg)
+		respMsg = &msg
+		respMsg.Type = gocoap.Acknowledgement
+	default:
+		respMsg = rh.ServeCOAP(conn, addr, &msg)
+	}
+	if respMsg != nil {
+		gocoap.Transmit(conn, addr, *respMsg)
+	}
+}
+
 // ListenAndServe binds to the given address and serve requests forever.
 func ListenAndServe(svc Service, addr string, rh gocoap.Handler) error {
 	uaddr, err := net.ResolveUDPAddr(network, addr)
@@ -33,6 +52,6 @@ func ListenAndServe(svc Service, addr string, rh gocoap.Handler) error {
 		}
 		tmp := make([]byte, nr)
 		copy(tmp, buf)
-		go svc.serve(conn, tmp, addr, rh)
+		go serve(svc, conn, tmp, addr, rh)
 	}
 }
