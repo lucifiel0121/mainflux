@@ -14,29 +14,35 @@ import (
 
 var auth manager.ManagerClient
 
-func authKey(opt interface{}) (string, gocoap.COAPCode, error) {
+func authKey(opt interface{}) (string, error) {
 	if opt == nil {
-		return "", gocoap.BadRequest, errBadRequest
+		return "", errBadRequest
 	}
 	val, ok := opt.(string)
 	if !ok {
-		return "", gocoap.BadRequest, errBadRequest
+		return "", errBadRequest
 	}
 	arr := strings.Split(val, "=")
 	if len(arr) != 2 || strings.ToLower(arr[0]) != "key" {
-		return "", gocoap.BadOption, errBadOption
+		return "", errBadOption
 	}
-	return arr[1], gocoap.Valid, nil
+	return arr[1], nil
 }
 
 // Authorize method is used to authorize request.
 func Authorize(msg *gocoap.Message, res *gocoap.Message, cid string) (publisher string, err error) {
 	// Device Key is passed as Uri-Query parameter, which option ID is 15 (0xf).
-	key, code, err := authKey(msg.Option(gocoap.URIQuery))
+	key, err := authKey(msg.Option(gocoap.URIQuery))
 	if err != nil {
-		res.Code = code
+		switch err {
+		case errBadOption:
+			res.Code = gocoap.BadOption
+		case errBadRequest:
+			res.Code = gocoap.BadRequest
+		}
 		return
 	}
+	res.Code = gocoap.Valid
 
 	publisher, err = auth.CanAccess(cid, key)
 	if err != nil {
