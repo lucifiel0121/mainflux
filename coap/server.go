@@ -42,7 +42,6 @@ func Authorize(msg *gocoap.Message, res *gocoap.Message, cid string) (publisher 
 		}
 		return
 	}
-	res.Code = gocoap.Valid
 
 	publisher, err = auth.CanAccess(cid, key)
 	if err != nil {
@@ -66,14 +65,16 @@ func serve(svc Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh go
 	case gocoap.Reset:
 		respMsg = &msg
 		cid := mux.Var(&msg, "id")
+		respMsg.Type = gocoap.Acknowledgement
 		publisher, err := Authorize(&msg, respMsg, cid)
 		if err != nil {
 			respMsg.Code = gocoap.Unauthorized
 		} else {
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
-			svc.Unsubscribe(id)
-			respMsg = &msg
-			respMsg.Type = gocoap.Acknowledgement
+			err := svc.Unsubscribe(id)
+			if err != nil {
+				respMsg.Code = gocoap.InternalServerError
+			}
 		}
 	default:
 		respMsg = rh.ServeCOAP(conn, addr, &msg)

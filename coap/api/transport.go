@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -39,7 +40,6 @@ func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 
 // MakeHandler function return new CoAP server with GET, POST and NOT_FOUND handlers.
 func MakeHandler(svc coap.Service) gocoap.Handler {
-	// auth = mgr
 	r := mux.NewRouter()
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
@@ -138,19 +138,25 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 	}
 }
 
-func notify(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint32, count *[]byte) error {
-	err := sendMessage(conn, addr, msg, counter, count)
+func notify(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint16) error {
+	err := sendMessage(conn, addr, msg, counter)
 	if err != nil {
 		return svc.Unsubscribe(id)
 	}
 	return nil
 }
 
-func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint32, count *[]byte) error {
-	*counter++
-	binary.LittleEndian.PutUint32(*count, *counter)
-	msg.SetOption(gocoap.Observe, (*count)[:3])
+func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint16) error {
 	var err error
+	*counter++
+	now := time.Now().UnixNano() / int64(time.Millisecond)
+	buff := new(bytes.Buffer)
+	err = binary.Write(buff, binary.LittleEndian, now)
+	if err != nil {
+		return err
+	}
+	msg.MessageID = *counter
+	msg.SetOption(gocoap.Observe, buff.Bytes()[:3])
 	for i := 0; i < 3; i++ {
 		err = gocoap.Transmit(conn, addr, *msg)
 		if err != nil {
@@ -163,8 +169,7 @@ func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, coun
 }
 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
-	var counter uint32
-	count := make([]byte, 4)
+	counter := msg.MessageID
 	ticker := time.NewTicker(24 * time.Hour)
 	res := &gocoap.Message{
 		Type:      gocoap.NonConfirmable,
@@ -181,7 +186,7 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 			select {
 			case <-ticker.C:
 				res.Type = gocoap.Confirmable
-				if err := notify(svc, id, conn, addr, res, &counter, &count); err != nil {
+				if err := notify(svc, id, conn, addr, res, &counter); err != nil {
 					return
 				}
 			case rawMsg, ok := <-ch:
@@ -190,7 +195,7 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 				}
 				res.Type = gocoap.NonConfirmable
 				res.Payload = rawMsg.Payload
-				if err := notify(svc, id, conn, addr, res, &counter, &count); err != nil {
+				if err := notify(svc, id, conn, addr, res, &counter); err != nil {
 					return
 				}
 			}
