@@ -86,10 +86,6 @@ func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 			}
 			return res
 		}
-
-		if msg.IsConfirmable() {
-			res.Code = gocoap.Changed
-		}
 		return res
 	}
 }
@@ -138,29 +134,30 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 	}
 }
 
-func notify(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint16) error {
-	err := sendMessage(conn, addr, msg, counter)
+func notify(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
+	err := sendMessage(conn, addr, msg)
 	if err != nil {
 		return svc.Unsubscribe(id)
 	}
 	return nil
 }
 
-func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, counter *uint16) error {
+func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
 	var err error
-	*counter++
 	now := time.Now().UnixNano() / int64(time.Millisecond)
 	buff := new(bytes.Buffer)
 	err = binary.Write(buff, binary.LittleEndian, now)
 	if err != nil {
 		return err
 	}
-	msg.MessageID = *counter
 	msg.SetOption(gocoap.Observe, buff.Bytes()[:3])
+	timeout := time.Duration(5)
+	// Try to transmit 3 times; each time duplicate timeout between attempts.
 	for i := 0; i < 3; i++ {
 		err = gocoap.Transmit(conn, addr, *msg)
 		if err != nil {
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(timeout * time.Millisecond)
+			timeout *= 2
 			continue
 		}
 		return nil
@@ -169,7 +166,6 @@ func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, coun
 }
 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
-	counter := msg.MessageID
 	ticker := time.NewTicker(24 * time.Hour)
 	res := &gocoap.Message{
 		Type:      gocoap.NonConfirmable,
@@ -186,7 +182,7 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 			select {
 			case <-ticker.C:
 				res.Type = gocoap.Confirmable
-				if err := notify(svc, id, conn, addr, res, &counter); err != nil {
+				if err := notify(svc, id, conn, addr, res); err != nil {
 					return
 				}
 			case rawMsg, ok := <-ch:
@@ -195,7 +191,7 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 				}
 				res.Type = gocoap.NonConfirmable
 				res.Payload = rawMsg.Payload
-				if err := notify(svc, id, conn, addr, res, &counter); err != nil {
+				if err := notify(svc, id, conn, addr, res); err != nil {
 					return
 				}
 			}

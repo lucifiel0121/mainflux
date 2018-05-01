@@ -60,27 +60,33 @@ func serve(svc Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh go
 	if err != nil {
 		return
 	}
-	var respMsg *gocoap.Message
+	var res *gocoap.Message
 	switch msg.Type {
 	case gocoap.Reset:
-		respMsg = &msg
+		res := &gocoap.Message{
+			Type:      gocoap.NonConfirmable,
+			Code:      gocoap.Content,
+			MessageID: msg.MessageID,
+			Token:     msg.Token,
+			Payload:   []byte{},
+		}
 		cid := mux.Var(&msg, "id")
-		respMsg.Type = gocoap.Acknowledgement
-		publisher, err := Authorize(&msg, respMsg, cid)
+		res.Type = gocoap.Acknowledgement
+		publisher, err := Authorize(&msg, res, cid)
 		if err != nil {
-			respMsg.Code = gocoap.Unauthorized
+			res.Code = gocoap.Unauthorized
 		} else {
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
 			err := svc.Unsubscribe(id)
 			if err != nil {
-				respMsg.Code = gocoap.InternalServerError
+				res.Code = gocoap.InternalServerError
 			}
 		}
 	default:
-		respMsg = rh.ServeCOAP(conn, addr, &msg)
+		res = rh.ServeCOAP(conn, addr, &msg)
 	}
-	if respMsg != nil {
-		gocoap.Transmit(conn, addr, *respMsg)
+	if res != nil {
+		gocoap.Transmit(conn, addr, *res)
 	}
 }
 
