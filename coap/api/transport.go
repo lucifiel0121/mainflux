@@ -25,9 +25,11 @@ var (
 const (
 	protocol  = "coap"
 	maxPktLen = 1500
+	// Approximately number of supported requests per second
+	timestamp = int64(time.Millisecond) * 31
 )
 
-// NotFoundHandler handles erroneusly formed requests.
+// NotFoundHandler handles erroneously formed requests.
 func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.Message {
 	if m.IsConfirmable() {
 		return &gocoap.Message{
@@ -144,7 +146,7 @@ func notify(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, m
 
 func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
 	var err error
-	now := time.Now().UnixNano() / int64(time.Millisecond)
+	now := time.Now().UnixNano() / timestamp
 	buff := new(bytes.Buffer)
 	err = binary.Write(buff, binary.LittleEndian, now)
 	if err != nil {

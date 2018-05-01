@@ -75,8 +75,7 @@ func (svc *adapterService) Unsubscribe(id string) error {
 	if !ok {
 		return nil
 	}
-	err := obs.Sub.Unsubscribe()
-	if err != nil {
+	if err := obs.Sub.Unsubscribe(); err != nil {
 		return err
 	}
 	svc.mu.Lock()
