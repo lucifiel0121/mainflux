@@ -83,10 +83,7 @@ func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		}
 
 		if err := svc.Publish(rawMsg); err != nil {
-			if msg.IsConfirmable() {
-				res.Code = gocoap.InternalServerError
-			}
-			return res
+			res.Code = gocoap.InternalServerError
 		}
 		return res
 	}
@@ -116,8 +113,7 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 1 {
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
-			err := svc.Unsubscribe(id)
-			if err != nil {
+			if err := svc.Unsubscribe(id); err != nil {
 				res.Code = gocoap.InternalServerError
 			}
 		}
@@ -137,8 +133,7 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 }
 
 func notify(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
-	err := sendMessage(conn, addr, msg)
-	if err != nil {
+	if err := sendMessage(conn, addr, msg); err != nil {
 		return svc.Unsubscribe(id)
 	}
 	return nil
@@ -148,8 +143,7 @@ func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) erro
 	var err error
 	now := time.Now().UnixNano() / timestamp
 	buff := new(bytes.Buffer)
-	err = binary.Write(buff, binary.LittleEndian, now)
-	if err != nil {
+	if err = binary.Write(buff, binary.LittleEndian, now); err != nil {
 		return err
 	}
 	msg.SetOption(gocoap.Observe, buff.Bytes()[:3])
@@ -168,7 +162,7 @@ func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) erro
 }
 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(5 * time.Second)
 	res := &gocoap.Message{
 		Type:      gocoap.NonConfirmable,
 		Code:      gocoap.Content,
@@ -187,6 +181,7 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 				if err := notify(svc, id, conn, addr, res); err != nil {
 					return
 				}
+				svc.SetTimeout(id, time.Second)
 			case rawMsg, ok := <-ch:
 				if !ok {
 					return
@@ -200,5 +195,4 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 		}
 	}()
 	ticker.Stop()
-	println("worker finished...")
 }

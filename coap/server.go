@@ -60,16 +60,15 @@ func serve(svc Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh go
 	if err != nil {
 		return
 	}
-	var res *gocoap.Message
+	res := &gocoap.Message{
+		Type:      gocoap.NonConfirmable,
+		Code:      gocoap.Content,
+		MessageID: msg.MessageID,
+		Token:     msg.Token,
+		Payload:   []byte{},
+	}
 	switch msg.Type {
 	case gocoap.Reset:
-		res := &gocoap.Message{
-			Type:      gocoap.NonConfirmable,
-			Code:      gocoap.Content,
-			MessageID: msg.MessageID,
-			Token:     msg.Token,
-			Payload:   []byte{},
-		}
 		cid := mux.Var(&msg, "id")
 		res.Type = gocoap.Acknowledgement
 		publisher, err := Authorize(&msg, res, cid)
@@ -77,11 +76,21 @@ func serve(svc Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh go
 			res.Code = gocoap.Unauthorized
 		} else {
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
+			svc.RemoveTimeout(id)
 			err := svc.Unsubscribe(id)
 			if err != nil {
 				res.Code = gocoap.InternalServerError
 			}
 		}
+	case gocoap.Acknowledgement:
+		cid := mux.Var(&msg, "id")
+		res.Type = gocoap.Acknowledgement
+		publisher, err := Authorize(&msg, res, cid)
+		if err != nil {
+			res.Code = gocoap.Unauthorized
+		}
+		id := fmt.Sprintf("%s-%x", publisher, msg.Token)
+		svc.RemoveTimeout(id)
 	default:
 		res = rh.ServeCOAP(conn, addr, &msg)
 	}

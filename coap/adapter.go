@@ -3,6 +3,7 @@ package coap
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/coap/nats"
@@ -18,14 +19,15 @@ const (
 )
 
 var (
-	errBadRequest = errors.New("bad request")
-	errBadOption  = errors.New("bad option")
+	errBadRequest    = errors.New("bad request")
+	errBadOption     = errors.New("bad option")
+	errEntryNotFound = errors.New("observer entry not founds")
 )
 
 // AdapterService struct represents CoAP adapter service implementation.
 type adapterService struct {
 	pubsub nats.Service
-	Subs   map[string]nats.Observer
+	subs   map[string]nats.Observer
 	mu     sync.Mutex
 }
 
@@ -33,7 +35,7 @@ type adapterService struct {
 func New(pubsub nats.Service) Service {
 	return &adapterService{
 		pubsub: pubsub,
-		Subs:   make(map[string]nats.Observer),
+		subs:   make(map[string]nats.Observer),
 		mu:     sync.Mutex{},
 	}
 }
@@ -60,9 +62,10 @@ func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.R
 		return err
 	}
 	svc.mu.Lock()
-	svc.Subs[clientID] = nats.Observer{
-		Sub:   sub,
-		MsgCh: ch,
+	svc.subs[clientID] = nats.Observer{
+		Sub:     sub,
+		MsgCh:   ch,
+		Timeout: make(chan bool),
 	}
 	svc.mu.Unlock()
 	return nil
@@ -70,7 +73,7 @@ func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.R
 
 func (svc *adapterService) Unsubscribe(id string) error {
 	svc.mu.Lock()
-	obs, ok := svc.Subs[id]
+	obs, ok := svc.subs[id]
 	svc.mu.Unlock()
 	if !ok {
 		return nil
@@ -79,8 +82,40 @@ func (svc *adapterService) Unsubscribe(id string) error {
 		return err
 	}
 	svc.mu.Lock()
-	delete(svc.Subs, id)
-	svc.mu.Unlock()
 	close(obs.MsgCh)
+	close(obs.Timeout)
+	delete(svc.subs, id)
+	svc.mu.Unlock()
 	return nil
+}
+
+func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) error {
+	svc.mu.Lock()
+	sub, ok := svc.subs[clientID]
+	svc.mu.Unlock()
+	if !ok {
+		return errEntryNotFound
+	}
+	println("Setting timeout")
+	timer := time.NewTimer(timeout)
+	go func() {
+		select {
+		case <-sub.Timeout:
+			timer.Stop()
+		case <-timer.C:
+			println("timer triggerd")
+			timer.Stop()
+			svc.Unsubscribe(clientID)
+		}
+	}()
+	return nil
+}
+
+func (svc *adapterService) RemoveTimeout(clientID string) {
+	svc.mu.Lock()
+	sub, ok := svc.subs[clientID]
+	if ok {
+		sub.Timeout <- false
+	}
+	svc.mu.Unlock()
 }

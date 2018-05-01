@@ -16,6 +16,7 @@ type Subscription interface {
 
 // Observer struct represents observer of CoAP messages.
 type Observer struct {
-	Sub   Subscription
-	MsgCh chan mainflux.RawMessage
+	Sub     Subscription
+	MsgCh   chan mainflux.RawMessage
+	Timeout chan bool
 }

@@ -2,6 +2,7 @@ package coap
 
 import (
 	"errors"
+	"time"
 
 	"github.com/mainflux/mainflux"
 )
@@ -25,4 +26,9 @@ type Service interface {
 	Subscribe(string, string, chan mainflux.RawMessage) error
 	// Unsubscribe method is used to stop observing resource.
 	Unsubscribe(string) error
+	// SetTimeout sets timeout to wait CONF messages.
+	SetTimeout(string, time.Duration) error
+	// RemoveTimeout removes timeout when ACK message is received from client
+	// if timeout existed.
+	RemoveTimeout(string)
 }
