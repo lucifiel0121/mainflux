@@ -55,9 +55,9 @@ func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.R
 	if err != nil {
 		return ErrFailedSubscription
 	}
-	// Remove if entry already exists.
-	if _, ok := svc.Subs[clientID]; ok == true {
-		svc.Unsubscribe(clientID)
+	// Remove entry if already exists.
+	if err := svc.Unsubscribe(clientID); err != nil {
+		return err
 	}
 	svc.mu.Lock()
 	svc.Subs[clientID] = nats.Observer{
@@ -69,7 +69,9 @@ func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.R
 }
 
 func (svc *adapterService) Unsubscribe(id string) error {
+	svc.mu.Lock()
 	obs, ok := svc.Subs[id]
+	svc.mu.Unlock()
 	if !ok {
 		return nil
 	}
