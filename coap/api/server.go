@@ -72,12 +72,13 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 		publisher, err := authorize(&msg, res, cid)
 		if err != nil {
 			res.Code = gocoap.Unauthorized
-		} else {
-			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
-			svc.RemoveTimeout(id)
-			if err := svc.Unsubscribe(id); err != nil {
-				res.Code = gocoap.InternalServerError
-			}
+			break
+		}
+		id := fmt.Sprintf("%s-%x", publisher, msg.Token)
+		svc.RemoveTimeout(id)
+		if err := svc.Unsubscribe(id); err != nil {
+			res.Code = gocoap.InternalServerError
+
 		}
 	case gocoap.Acknowledgement:
 		cid := mux.Var(&msg, "id")
@@ -91,7 +92,7 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 	default:
 		res = rh.ServeCOAP(conn, addr, &msg)
 	}
-	if res != nil {
+	if res != nil && msg.IsConfirmable() {
 		gocoap.Transmit(conn, addr, *res)
 	}
 }

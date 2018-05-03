@@ -133,12 +133,14 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 
 func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
 	var err error
-	now := time.Now().UnixNano() / timestamp
 	buff := new(bytes.Buffer)
-	if err = binary.Write(buff, binary.LittleEndian, now); err != nil {
+	now := time.Now().UnixNano() / timestamp
+	if err = binary.Write(buff, binary.BigEndian, now); err != nil {
 		return err
 	}
-	msg.SetOption(gocoap.Observe, buff.Bytes()[:3])
+	observeVal := buff.Bytes()
+	msg.SetOption(gocoap.Observe, observeVal[len(observeVal)-3:])
+
 	timeout := time.Duration(5)
 	// Try to transmit 3 times; each time duplicate timeout between attempts.
 	for i := 0; i < 3; i++ {
