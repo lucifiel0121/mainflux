@@ -10,11 +10,6 @@ import (
 	broker "github.com/nats-io/go-nats"
 )
 
-const (
-	key     string = "key"
-	channel string = "id"
-)
-
 var (
 	errBadRequest    = errors.New("bad request")
 	errBadOption     = errors.New("bad option")
