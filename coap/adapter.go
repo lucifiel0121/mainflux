@@ -11,11 +11,8 @@ import (
 )
 
 const (
-	key       string = "key"
-	channel   string = "id"
-	protocol  string = "coap"
-	maxPktLen int    = 1500
-	network          = "udp"
+	key     string = "key"
+	channel string = "id"
 )
 
 var (
@@ -96,14 +93,12 @@ func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) er
 	if !ok {
 		return errEntryNotFound
 	}
-	println("Setting timeout")
 	timer := time.NewTimer(timeout)
 	go func() {
 		select {
 		case <-sub.Timeout:
 			timer.Stop()
 		case <-timer.C:
-			println("timer triggerd")
 			timer.Stop()
 			svc.Unsubscribe(clientID)
 		}

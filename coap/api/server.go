@@ -1,4 +1,4 @@
-package coap
+package api
 
 import (
 	"fmt"
@@ -7,12 +7,11 @@ import (
 	"time"
 
 	mux "github.com/dereulenspiegel/coap-mux"
+	"github.com/mainflux/mainflux/coap"
 	manager "github.com/mainflux/mainflux/manager/client"
 
 	gocoap "github.com/dustin/go-coap"
 )
-
-var auth manager.ManagerClient
 
 func authKey(opt interface{}) (string, error) {
 	if opt == nil {
@@ -55,7 +54,7 @@ func Authorize(msg *gocoap.Message, res *gocoap.Message, cid string) (publisher 
 	return
 }
 
-func serve(svc Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh gocoap.Handler) {
+func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh gocoap.Handler) {
 	msg, err := gocoap.ParseMessage(data)
 	if err != nil {
 		return
@@ -100,7 +99,7 @@ func serve(svc Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, rh go
 }
 
 // ListenAndServe binds to the given address and serve requests forever.
-func ListenAndServe(svc Service, mgr manager.ManagerClient, addr string, rh gocoap.Handler) error {
+func ListenAndServe(svc coap.Service, mgr manager.ManagerClient, addr string, rh gocoap.Handler) error {
 	auth = mgr
 	uaddr, err := net.ResolveUDPAddr(network, addr)
 	if err != nil {

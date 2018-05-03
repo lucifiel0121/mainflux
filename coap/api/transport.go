@@ -17,17 +17,16 @@ import (
 )
 
 var (
-	auth          manager.ManagerClient
 	errBadRequest = errors.New("bad request")
 	errBadOption  = errors.New("bad option")
+	auth          manager.ManagerClient
+	maxPktLen     = 1500
+	network       = "udp"
+	protocol      = "coap"
 )
 
-const (
-	protocol  = "coap"
-	maxPktLen = 1500
-	// Approximately number of supported requests per second
-	timestamp = int64(time.Millisecond) * 31
-)
+// Approximately number of supported requests per second
+const timestamp = int64(time.Millisecond) * 31
 
 // NotFoundHandler handles erroneously formed requests.
 func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.Message {
@@ -69,7 +68,7 @@ func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		}
 
 		cid := mux.Var(msg, "id")
-		publisher, err := coap.Authorize(msg, res, cid)
+		publisher, err := Authorize(msg, res, cid)
 		if err != nil {
 			res.Code = gocoap.Unauthorized
 			return res
@@ -104,7 +103,7 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 		}
 
 		cid := mux.Var(msg, "id")
-		publisher, err := coap.Authorize(msg, res, cid)
+		publisher, err := Authorize(msg, res, cid)
 
 		if err != nil {
 			res.Code = gocoap.Unauthorized
@@ -155,7 +154,7 @@ func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) erro
 }
 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(24 * time.Hour)
 	res := &gocoap.Message{
 		Type:      gocoap.NonConfirmable,
 		Code:      gocoap.Content,
