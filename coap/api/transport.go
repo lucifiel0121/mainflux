@@ -132,13 +132,6 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 	}
 }
 
-func notify(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
-	if err := sendMessage(conn, addr, msg); err != nil {
-		return svc.Unsubscribe(id)
-	}
-	return nil
-}
-
 func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
 	var err error
 	now := time.Now().UnixNano() / timestamp
@@ -178,7 +171,8 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 			select {
 			case <-ticker.C:
 				res.Type = gocoap.Confirmable
-				if err := notify(svc, id, conn, addr, res); err != nil {
+				if err := sendMessage(conn, addr, res); err != nil {
+					svc.Unsubscribe(id)
 					return
 				}
 				svc.SetTimeout(id, time.Second)
@@ -188,7 +182,8 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 				}
 				res.Type = gocoap.NonConfirmable
 				res.Payload = rawMsg.Payload
-				if err := notify(svc, id, conn, addr, res); err != nil {
+				if err := sendMessage(conn, addr, res); err != nil {
+					svc.Unsubscribe(id)
 					return
 				}
 			}
