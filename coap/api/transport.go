@@ -165,28 +165,27 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 	res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 	res.SetOption(gocoap.LocationPath, msg.Path())
 
-	func() {
-		for {
-			select {
-			case <-ticker.C:
-				res.Type = gocoap.Confirmable
-				if err := sendMessage(conn, addr, res); err != nil {
-					svc.Unsubscribe(id)
-					return
-				}
-				svc.SetTimeout(id, time.Second)
-			case rawMsg, ok := <-ch:
-				if !ok {
-					return
-				}
-				res.Type = gocoap.NonConfirmable
-				res.Payload = rawMsg.Payload
-				if err := sendMessage(conn, addr, res); err != nil {
-					svc.Unsubscribe(id)
-					return
-				}
+loop:
+	for {
+		select {
+		case <-ticker.C:
+			res.Type = gocoap.Confirmable
+			if err := sendMessage(conn, addr, res); err != nil {
+				svc.Unsubscribe(id)
+				break loop
+			}
+			svc.SetTimeout(id, time.Second)
+		case rawMsg, ok := <-ch:
+			if !ok {
+				break loop
+			}
+			res.Type = gocoap.NonConfirmable
+			res.Payload = rawMsg.Payload
+			if err := sendMessage(conn, addr, res); err != nil {
+				svc.Unsubscribe(id)
+				break loop
 			}
 		}
-	}()
+	}
 	ticker.Stop()
 }
