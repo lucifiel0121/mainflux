@@ -32,6 +32,30 @@ func New(pubsub nats.Service) Service {
 	}
 }
 
+func (svc *adapterService) get(id string) (nats.Observer, bool) {
+	svc.mu.Lock()
+	obs, ok := svc.subs[id]
+	svc.mu.Unlock()
+	return obs, ok
+}
+
+func (svc *adapterService) put(id string, obs nats.Observer) {
+	svc.mu.Lock()
+	svc.subs[id] = obs
+	svc.mu.Unlock()
+}
+
+func (svc *adapterService) remove(id string) {
+	svc.mu.Lock()
+	obs, ok := svc.subs[id]
+	if ok {
+		close(obs.MsgCh)
+		close(obs.Timeout)
+		delete(svc.subs, id)
+	}
+	svc.mu.Unlock()
+}
+
 func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 	if err := svc.pubsub.Publish(msg); err != nil {
 		switch err {
@@ -45,46 +69,37 @@ func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 }
 
 func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.RawMessage) error {
-	sub, err := svc.pubsub.Subscribe(chanID, ch)
-	if err != nil {
-		return ErrFailedSubscription
-	}
 	// Remove entry if already exists.
 	if err := svc.Unsubscribe(clientID); err != nil {
 		return err
 	}
-	svc.mu.Lock()
-	svc.subs[clientID] = nats.Observer{
+	sub, err := svc.pubsub.Subscribe(chanID, ch)
+	if err != nil {
+		return ErrFailedSubscription
+	}
+	obs := nats.Observer{
 		Sub:     sub,
 		MsgCh:   ch,
 		Timeout: make(chan bool),
 	}
-	svc.mu.Unlock()
+	svc.put(clientID, obs)
 	return nil
 }
 
 func (svc *adapterService) Unsubscribe(id string) error {
-	svc.mu.Lock()
-	obs, ok := svc.subs[id]
-	svc.mu.Unlock()
+	obs, ok := svc.get(id)
 	if !ok {
 		return nil
 	}
 	if err := obs.Sub.Unsubscribe(); err != nil {
 		return err
 	}
-	svc.mu.Lock()
-	close(obs.MsgCh)
-	close(obs.Timeout)
-	delete(svc.subs, id)
-	svc.mu.Unlock()
+	svc.remove(id)
 	return nil
 }
 
 func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) error {
-	svc.mu.Lock()
-	sub, ok := svc.subs[clientID]
-	svc.mu.Unlock()
+	sub, ok := svc.get(clientID)
 	if !ok {
 		return errEntryNotFound
 	}
@@ -102,10 +117,8 @@ func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) er
 }
 
 func (svc *adapterService) RemoveTimeout(clientID string) {
-	svc.mu.Lock()
-	sub, ok := svc.subs[clientID]
+	sub, ok := svc.get(clientID)
 	if ok {
 		sub.Timeout <- false
 	}
-	svc.mu.Unlock()
 }

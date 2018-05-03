@@ -5,7 +5,7 @@ import "github.com/mainflux/mainflux"
 // Service specifies NATS service API.
 type Service interface {
 	mainflux.MessagePublisher
-	// Subscribes to channel with specified id.
+	// Subscribe is used to subscribe to channel with specified id.
 	Subscribe(string, chan mainflux.RawMessage) (Subscription, error)
 }
 
