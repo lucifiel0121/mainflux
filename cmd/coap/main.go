@@ -6,13 +6,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-kit/kit/log"
 	"github.com/mainflux/mainflux"
 	manager "github.com/mainflux/mainflux/manager/client"
 
 	"github.com/mainflux/mainflux/coap"
 	"github.com/mainflux/mainflux/coap/api"
 	"github.com/mainflux/mainflux/coap/nats"
+	log "github.com/mainflux/mainflux/logger"
 
 	broker "github.com/nats-io/go-nats"
 )
@@ -39,12 +39,11 @@ func main() {
 		Port:       defPort,
 	}
 
-	logger := log.NewJSONLogger(log.NewSyncWriter(os.Stdout))
-	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
+	logger := log.New(os.Stdout)
 
 	nc, err := broker.Connect(cfg.NatsURL)
 	if err != nil {
-		logger.Log("error", err)
+		logger.Error(fmt.Sprintf("Failed to connect to NATS: %s", err))
 		os.Exit(1)
 	}
 	defer nc.Close()
@@ -57,7 +56,7 @@ func main() {
 
 	go func() {
 		coapAddr := fmt.Sprintf(":%d", cfg.Port)
-		logger.Log("message", fmt.Sprintf("CoAP adapter service started, exposed port %d", cfg.Port))
+		logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %d", cfg.Port))
 		errs <- api.ListenAndServe(svc, mgr, coapAddr, api.MakeHandler(svc))
 	}()
 
@@ -68,7 +67,7 @@ func main() {
 	}()
 
 	c := <-errs
-	logger.Log("terminated", fmt.Sprintf("Proces exited: %s", c.Error()))
+	logger.Info(fmt.Sprintf("Proces exited: %s", c.Error()))
 }
 
 func env(key, fallback string) string {
