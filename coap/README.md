@@ -13,7 +13,7 @@ default values.
 |-----------------------|------------------------|-------------------------|
 | MF_COAP_ADAPTER_PORT  | adapter listening port | `5683`                  |
 | MF_NATS_URL           | NATS instance URL      | `nats://localhost:4222` |
-| FM_MANAGER_URL        | manager service URL    | `http://localhost:8180` |
+| MF_MANAGER_URL        | manager service URL    | `http://localhost:8180` |
 
 ## Deployment
 
