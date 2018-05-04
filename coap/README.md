@@ -29,14 +29,31 @@ services:
     ports:
       - [host machine port]:[configured port]
     environment:
-      COAP_ADAPTER_NATS_URL: [NATS instance URL]
+      MF_MANAGER_URL: [Manager service URL]
+      MF_NATS_URL: [NATS instance URL]
+      MF_COAP_ADAPTER_PORT: [Service HTTP port]
 ```
 
 Running this service outside of container requires working instance of the NATS service.
-To build the service outside of the container, execute the following shell script:
+To start the service outside of the container, execute the following shell script:
 
 ```bash
+# download the latest version of the service
+go get github.com/mainflux/mainflux
+
+cd $GOPATH/src/github.com/mainflux/mainflux
+
+# compile the http
 make coap
-cd build
-./mainflux-coap
+
+# copy binary to bin
+make install
+
+# set the environment variables and run the service
+MF_MANAGER_URL=[Manager service URL] MF_NATS_URL=[NATS instance URL] MF_COAP_ADAPTER_PORT=[Service HTTP port] $GOBIN/mainflux-coap
 ```
+
+## Usage
+
+Since CoAP protocol does not support `Authorization` header (option), in order to send CoAP messages,
+client valid key must be present in `Uri-Query` option.

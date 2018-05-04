@@ -222,6 +222,5 @@ loop:
 			}
 		}
 	}
-	println("stoped")
 	ticker.Stop()
 }

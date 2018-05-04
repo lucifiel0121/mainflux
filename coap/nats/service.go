@@ -23,7 +23,6 @@ type Channel struct {
 
 // Close channel and stop message transfer.
 func (channel Channel) Close() {
-	println("close...")
 	close(channel.Messages)
 	close(channel.Closed)
 	close(channel.Timer)
