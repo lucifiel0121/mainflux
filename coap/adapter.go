@@ -117,8 +117,7 @@ func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) er
 }
 
 func (svc *adapterService) RemoveTimeout(clientID string) {
-	sub, ok := svc.get(clientID)
-	if ok {
+	if sub, ok := svc.get(clientID); ok {
 		sub.Timeout <- false
 	}
 }

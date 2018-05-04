@@ -13,16 +13,18 @@ import (
 	gocoap "github.com/dustin/go-coap"
 )
 
+const (
+	chanID    = "id"
+	keyHeader = "key"
+)
+
 func authKey(opt interface{}) (string, error) {
-	if opt == nil {
-		return "", errBadRequest
-	}
 	val, ok := opt.(string)
 	if !ok {
 		return "", errBadRequest
 	}
 	arr := strings.Split(val, "=")
-	if len(arr) != 2 || strings.ToLower(arr[0]) != "key" {
+	if len(arr) != 2 || strings.ToLower(arr[0]) != keyHeader {
 		return "", errBadOption
 	}
 	return arr[1], nil
@@ -65,9 +67,16 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 		Token:     msg.Token,
 		Payload:   []byte{},
 	}
+	res.SetOption(gocoap.MaxRetransmit, msg.Option(gocoap.MaxRetransmit))
+	res.SetOption(gocoap.MaxAge, msg.Option(gocoap.MaxAge))
+
 	switch msg.Type {
 	case gocoap.Reset:
-		cid := mux.Var(&msg, "id")
+		if len(msg.Payload) != 0 {
+			res.Code = gocoap.BadRequest
+			break
+		}
+		cid := mux.Var(&msg, chanID)
 		res.Type = gocoap.Acknowledgement
 		publisher, err := authorize(&msg, res, cid)
 		if err != nil {
@@ -81,11 +90,12 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 
 		}
 	case gocoap.Acknowledgement:
-		cid := mux.Var(&msg, "id")
+		cid := mux.Var(&msg, chanID)
 		res.Type = gocoap.Acknowledgement
 		publisher, err := authorize(&msg, res, cid)
 		if err != nil {
 			res.Code = gocoap.Unauthorized
+			break
 		}
 		id := fmt.Sprintf("%s-%x", publisher, msg.Token)
 		svc.RemoveTimeout(id)

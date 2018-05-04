@@ -11,6 +11,8 @@ import (
 	"github.com/mainflux/mainflux/coap"
 	manager "github.com/mainflux/mainflux/manager/client"
 
+	"math/rand"
+
 	mux "github.com/dereulenspiegel/coap-mux"
 	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
@@ -20,13 +22,25 @@ var (
 	errBadRequest = errors.New("bad request")
 	errBadOption  = errors.New("bad option")
 	auth          manager.ManagerClient
-	maxPktLen     = 1500
-	network       = "udp"
-	protocol      = "coap"
 )
 
-// Approximately number of supported requests per second
-const timestamp = int64(time.Millisecond) * 31
+const (
+	maxPktLen = 1500
+	network   = "udp"
+	protocol  = "coap"
+)
+
+const (
+	// Approximately number of supported requests per second
+	timestamp = int64(time.Millisecond) * 31
+	// Default transmission settings from RFC.
+	defaultMaxRetransmit   = 4
+	defaultAckRandomFactor = 1.5
+	defaultAckTimeout      = int(2000 * time.Millisecond)
+	maxTimeout             = int(float64(defaultAckTimeout) * defaultAckRandomFactor)
+)
+
+type handler func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message
 
 // NotFoundHandler handles erroneously formed requests.
 func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.Message {
@@ -48,7 +62,7 @@ func MakeHandler(svc coap.Service) gocoap.Handler {
 	return r
 }
 
-func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
+func receive(svc coap.Service) handler {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
 		var res *gocoap.Message
 		if msg.IsConfirmable() {
@@ -88,7 +102,7 @@ func receive(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 	}
 }
 
-func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
+func observe(svc coap.Service) handler {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
 		var res *gocoap.Message
 		if msg.IsConfirmable() {
@@ -131,6 +145,30 @@ func observe(svc coap.Service) func(conn *net.UDPConn, addr *net.UDPAddr, msg *g
 	}
 }
 
+func sendConfirmable(seed int64, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
+	var err error
+	rand.Seed(seed)
+	timeout := time.Duration((rand.Intn(maxTimeout-defaultAckTimeout) + defaultAckTimeout))
+	// Try to transmit MAX_RETRANSMITION times; every attempt duplicates timeout between transmission.
+	max := defaultMaxRetransmit
+	if value, ok := msg.Option(gocoap.MaxRetransmit).(int); ok {
+		max = value
+	} else {
+		msg.SetOption(gocoap.MaxRetransmit, defaultMaxRetransmit)
+	}
+
+	for i := 0; i < max; i++ {
+		err = gocoap.Transmit(conn, addr, *msg)
+		if err != nil {
+			time.Sleep(timeout)
+			timeout *= 2
+			continue
+		}
+		return nil
+	}
+	return err
+}
+
 func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
 	var err error
 	buff := new(bytes.Buffer)
@@ -140,23 +178,16 @@ func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) erro
 	}
 	observeVal := buff.Bytes()
 	msg.SetOption(gocoap.Observe, observeVal[len(observeVal)-3:])
-
-	timeout := time.Duration(5)
-	// Try to transmit 3 times; each time duplicate timeout between attempts.
-	for i := 0; i < 3; i++ {
-		err = gocoap.Transmit(conn, addr, *msg)
-		if err != nil {
-			time.Sleep(timeout * time.Millisecond)
-			timeout *= 2
-			continue
-		}
-		return nil
+	if msg.IsConfirmable() {
+		return sendConfirmable(now, conn, addr, msg)
 	}
-	return err
+	return gocoap.Transmit(conn, addr, *msg)
 }
 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
-	ticker := time.NewTicker(24 * time.Hour)
+	// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
+	// 24 hours. Since 24 hours is too long for our purposes, we use 12.
+	ticker := time.NewTicker(12 * time.Hour)
 	res := &gocoap.Message{
 		Type:      gocoap.NonConfirmable,
 		Code:      gocoap.Content,
