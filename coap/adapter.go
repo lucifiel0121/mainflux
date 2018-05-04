@@ -81,12 +81,11 @@ func (svc *adapterService) Unsubscribe(clientID string) {
 	svc.remove(clientID)
 }
 
-func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) error {
+func (svc *adapterService) SetTimeout(clientID string, timer *time.Timer) error {
 	sub, ok := svc.get(clientID)
 	if !ok {
 		return errEntryNotFound
 	}
-	timer := time.NewTimer(timeout)
 	go func() {
 		select {
 		case <-sub.Timer:

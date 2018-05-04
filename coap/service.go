@@ -28,7 +28,7 @@ type Service interface {
 	// Unsubscribe method is used to stop observing resource.
 	Unsubscribe(string)
 	// SetTimeout sets timeout to wait CONF messages.
-	SetTimeout(string, time.Duration) error
+	SetTimeout(string, *time.Timer) error
 	// RemoveTimeout removes timeout when ACK message is received from client
 	// if timeout existed.
 	RemoveTimeout(string)

@@ -148,7 +148,7 @@ func observe(svc coap.Service) handler {
 	}
 }
 
-func sendConfirmable(seed int64, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
+func sendConfirmable(seed int64, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, timer *time.Timer) error {
 	var err error
 	rand.Seed(seed)
 	timeout := time.Duration((rand.Intn(maxTimeout-defaultAckTimeout) + defaultAckTimeout))
@@ -163,6 +163,7 @@ func sendConfirmable(seed int64, conn *net.UDPConn, addr *net.UDPAddr, msg *goco
 	for i := 0; i < max; i++ {
 		err = gocoap.Transmit(conn, addr, *msg)
 		if err != nil {
+			timer.Reset(time.Duration(timeout))
 			time.Sleep(timeout)
 			timeout *= 2
 			continue
@@ -172,7 +173,7 @@ func sendConfirmable(seed int64, conn *net.UDPConn, addr *net.UDPAddr, msg *goco
 	return err
 }
 
-func sendMessage(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
+func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, timer *time.Timer) error {
 	var err error
 	buff := new(bytes.Buffer)
 	now := time.Now().UnixNano() / timestamp
@@ -182,7 +183,7 @@ func sendMessage(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAd
 	observeVal := buff.Bytes()
 	msg.SetOption(gocoap.Observe, observeVal[len(observeVal)-3:])
 	if msg.IsConfirmable() {
-		return sendConfirmable(now, conn, addr, msg)
+		return sendConfirmable(now, conn, addr, msg, timer)
 	}
 	return gocoap.Transmit(conn, addr, *msg)
 }
@@ -206,17 +207,18 @@ loop:
 		select {
 		case <-ticker.C:
 			res.Type = gocoap.Confirmable
-			if err := sendMessage(svc, id, conn, addr, res); err != nil {
+			timer := time.NewTimer(time.Duration(defaultAckTimeout))
+			svc.SetTimeout(id, timer)
+			if err := sendMessage(conn, addr, res, timer); err != nil {
 				break loop
 			}
-			svc.SetTimeout(id, time.Duration(defaultAckTimeout))
 		case rawMsg, ok := <-ch.Messages:
 			if !ok {
 				break loop
 			}
 			res.Type = gocoap.NonConfirmable
 			res.Payload = rawMsg.Payload
-			if err := sendMessage(svc, id, conn, addr, res); err != nil {
+			if err := sendMessage(conn, addr, res, nil); err != nil {
 				svc.Unsubscribe(id)
 				break loop
 			}
