@@ -4,8 +4,6 @@ package nats
 import (
 	"fmt"
 
-	"github.com/sony/gobreaker"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/mainflux/mainflux"
 	broker "github.com/nats-io/go-nats"
@@ -21,20 +19,11 @@ const (
 
 type natsPublisher struct {
 	nc *broker.Conn
-	cb *gobreaker.CircuitBreaker
 }
 
 // New instantiates NATS message pubsub.
 func New(nc *broker.Conn) Service {
-	st := gobreaker.Settings{
-		Name: "NATS",
-		ReadyToTrip: func(counts gobreaker.Counts) bool {
-			fr := float64(counts.TotalFailures) / float64(counts.Requests)
-			return counts.Requests >= maxFailedReqs && fr >= maxFailureRatio
-		},
-	}
-	cb := gobreaker.NewCircuitBreaker(st)
-	return &natsPublisher{nc, cb}
+	return &natsPublisher{nc}
 }
 
 func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
@@ -42,10 +31,7 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = pubsub.cb.Execute(func() (interface{}, error) {
-		return nil, pubsub.nc.Publish(fmt.Sprintf("%s.%s", prefix, msg.Channel), data)
-	})
-	return err
+	return pubsub.nc.Publish(fmt.Sprintf("%s.%s", prefix, msg.Channel), data)
 }
 
 func (pubsub *natsPublisher) Subscribe(chanID string, ch chan mainflux.RawMessage) (Subscription, error) {
