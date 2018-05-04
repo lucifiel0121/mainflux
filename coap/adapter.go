@@ -19,7 +19,7 @@ var (
 // AdapterService struct represents CoAP adapter service implementation.
 type adapterService struct {
 	pubsub nats.Service
-	subs   map[string]nats.Observer
+	subs   map[string]nats.Channel
 	mu     sync.Mutex
 }
 
@@ -27,31 +27,30 @@ type adapterService struct {
 func New(pubsub nats.Service) Service {
 	return &adapterService{
 		pubsub: pubsub,
-		subs:   make(map[string]nats.Observer),
+		subs:   make(map[string]nats.Channel),
 		mu:     sync.Mutex{},
 	}
 }
 
-func (svc *adapterService) get(id string) (nats.Observer, bool) {
+func (svc *adapterService) get(clientID string) (nats.Channel, bool) {
 	svc.mu.Lock()
-	obs, ok := svc.subs[id]
+	obs, ok := svc.subs[clientID]
 	svc.mu.Unlock()
 	return obs, ok
 }
 
-func (svc *adapterService) put(id string, obs nats.Observer) {
+func (svc *adapterService) put(clientID string, obs nats.Channel) {
 	svc.mu.Lock()
-	svc.subs[id] = obs
+	svc.subs[clientID] = obs
 	svc.mu.Unlock()
 }
 
-func (svc *adapterService) remove(id string) {
+func (svc *adapterService) remove(clientID string) {
 	svc.mu.Lock()
-	obs, ok := svc.subs[id]
+	obs, ok := svc.subs[clientID]
 	if ok {
-		close(obs.MsgCh)
-		close(obs.Timeout)
-		delete(svc.subs, id)
+		obs.Closed <- true
+		delete(svc.subs, clientID)
 	}
 	svc.mu.Unlock()
 }
@@ -68,34 +67,18 @@ func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 	return nil
 }
 
-func (svc *adapterService) Subscribe(chanID, clientID string, ch chan mainflux.RawMessage) error {
+func (svc *adapterService) Subscribe(chanID, clientID string, ch nats.Channel) error {
 	// Remove entry if already exists.
-	if err := svc.Unsubscribe(clientID); err != nil {
-		return err
-	}
-	sub, err := svc.pubsub.Subscribe(chanID, ch)
-	if err != nil {
+	svc.Unsubscribe(clientID)
+	if err := svc.pubsub.Subscribe(chanID, ch); err != nil {
 		return ErrFailedSubscription
 	}
-	obs := nats.Observer{
-		Sub:     sub,
-		MsgCh:   ch,
-		Timeout: make(chan bool),
-	}
-	svc.put(clientID, obs)
+	svc.put(clientID, ch)
 	return nil
 }
 
-func (svc *adapterService) Unsubscribe(id string) error {
-	obs, ok := svc.get(id)
-	if !ok {
-		return nil
-	}
-	if err := obs.Sub.Unsubscribe(); err != nil {
-		return err
-	}
-	svc.remove(id)
-	return nil
+func (svc *adapterService) Unsubscribe(clientID string) {
+	svc.remove(clientID)
 }
 
 func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) error {
@@ -106,7 +89,7 @@ func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) er
 	timer := time.NewTimer(timeout)
 	go func() {
 		select {
-		case <-sub.Timeout:
+		case <-sub.Timer:
 			timer.Stop()
 		case <-timer.C:
 			timer.Stop()
@@ -118,6 +101,6 @@ func (svc *adapterService) SetTimeout(clientID string, timeout time.Duration) er
 
 func (svc *adapterService) RemoveTimeout(clientID string) {
 	if sub, ok := svc.get(clientID); ok {
-		sub.Timeout <- false
+		sub.Timer <- false
 	}
 }

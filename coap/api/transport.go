@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mainflux/mainflux/coap"
+	"github.com/mainflux/mainflux/coap/nats"
 	manager "github.com/mainflux/mainflux/manager/client"
 
 	"math/rand"
@@ -126,13 +127,15 @@ func observe(svc coap.Service) handler {
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 1 {
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
-			if err := svc.Unsubscribe(id); err != nil {
-				res.Code = gocoap.InternalServerError
-			}
+			svc.Unsubscribe(id)
 		}
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
-			ch := make(chan mainflux.RawMessage)
+			ch := nats.Channel{
+				Messages: make(chan mainflux.RawMessage),
+				Closed:   make(chan bool),
+				Timer:    make(chan bool),
+			}
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
 			if err := svc.Subscribe(cid, id, ch); err != nil {
 				res.Code = gocoap.InternalServerError
@@ -169,7 +172,7 @@ func sendConfirmable(seed int64, conn *net.UDPConn, addr *net.UDPAddr, msg *goco
 	return err
 }
 
-func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
+func sendMessage(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
 	var err error
 	buff := new(bytes.Buffer)
 	now := time.Now().UnixNano() / timestamp
@@ -184,7 +187,7 @@ func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) erro
 	return gocoap.Transmit(conn, addr, *msg)
 }
 
-func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan mainflux.RawMessage) {
+func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch nats.Channel) {
 	// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
 	// 24 hours. Since 24 hours is too long for our purposes, we use 12.
 	ticker := time.NewTicker(12 * time.Hour)
@@ -203,22 +206,22 @@ loop:
 		select {
 		case <-ticker.C:
 			res.Type = gocoap.Confirmable
-			if err := sendMessage(conn, addr, res); err != nil {
-				svc.Unsubscribe(id)
+			if err := sendMessage(svc, id, conn, addr, res); err != nil {
 				break loop
 			}
-			svc.SetTimeout(id, time.Second)
-		case rawMsg, ok := <-ch:
+			svc.SetTimeout(id, time.Duration(defaultAckTimeout))
+		case rawMsg, ok := <-ch.Messages:
 			if !ok {
 				break loop
 			}
 			res.Type = gocoap.NonConfirmable
 			res.Payload = rawMsg.Payload
-			if err := sendMessage(conn, addr, res); err != nil {
+			if err := sendMessage(svc, id, conn, addr, res); err != nil {
 				svc.Unsubscribe(id)
 				break loop
 			}
 		}
 	}
+	println("stoped")
 	ticker.Stop()
 }

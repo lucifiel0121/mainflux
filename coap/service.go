@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/mainflux/mainflux"
+	"github.com/mainflux/mainflux/coap/nats"
 )
 
 var (
@@ -23,9 +24,9 @@ type Service interface {
 	mainflux.MessagePublisher
 	// Subscribes to channel with specified id and adds subscription to
 	// service map of subscriptions under given ID.
-	Subscribe(string, string, chan mainflux.RawMessage) error
+	Subscribe(string, string, nats.Channel) error
 	// Unsubscribe method is used to stop observing resource.
-	Unsubscribe(string) error
+	Unsubscribe(string)
 	// SetTimeout sets timeout to wait CONF messages.
 	SetTimeout(string, time.Duration) error
 	// RemoveTimeout removes timeout when ACK message is received from client

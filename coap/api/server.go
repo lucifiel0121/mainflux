@@ -85,10 +85,7 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 		}
 		id := fmt.Sprintf("%s-%x", publisher, msg.Token)
 		svc.RemoveTimeout(id)
-		if err := svc.Unsubscribe(id); err != nil {
-			res.Code = gocoap.InternalServerError
-
-		}
+		svc.Unsubscribe(id)
 	case gocoap.Acknowledgement:
 		cid := mux.Var(&msg, chanID)
 		res.Type = gocoap.Acknowledgement

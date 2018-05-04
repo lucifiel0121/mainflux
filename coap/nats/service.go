@@ -6,7 +6,7 @@ import "github.com/mainflux/mainflux"
 type Service interface {
 	mainflux.MessagePublisher
 	// Subscribe is used to subscribe to channel with specified id.
-	Subscribe(string, chan mainflux.RawMessage) (Subscription, error)
+	Subscribe(string, Channel) error
 }
 
 // Subscription interface represents subscription to messaging system.
@@ -14,9 +14,17 @@ type Subscription interface {
 	Unsubscribe() error
 }
 
-// Observer struct represents observer of CoAP messages.
-type Observer struct {
-	Sub     Subscription
-	MsgCh   chan mainflux.RawMessage
-	Timeout chan bool
+// Channel is used for receiving and sending messages.
+type Channel struct {
+	Messages chan mainflux.RawMessage
+	Closed   chan bool
+	Timer    chan bool
+}
+
+// Close channel and stop message transfer.
+func (channel Channel) Close() {
+	println("close...")
+	close(channel.Messages)
+	close(channel.Closed)
+	close(channel.Timer)
 }

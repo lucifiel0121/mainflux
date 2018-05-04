@@ -6,10 +6,13 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mainflux/mainflux"
+	log "github.com/mainflux/mainflux/logger"
 	broker "github.com/nats-io/go-nats"
 )
 
 var _ mainflux.MessagePublisher = (*natsPublisher)(nil)
+
+var logger log.Logger
 
 const (
 	maxFailedReqs   = 3
@@ -18,12 +21,13 @@ const (
 )
 
 type natsPublisher struct {
-	nc *broker.Conn
+	nc     *broker.Conn
+	logger log.Logger
 }
 
 // New instantiates NATS message pubsub.
-func New(nc *broker.Conn) Service {
-	return &natsPublisher{nc}
+func New(nc *broker.Conn, l log.Logger) Service {
+	return &natsPublisher{nc, l}
 }
 
 func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
@@ -34,7 +38,7 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	return pubsub.nc.Publish(fmt.Sprintf("%s.%s", prefix, msg.Channel), data)
 }
 
-func (pubsub *natsPublisher) Subscribe(chanID string, ch chan mainflux.RawMessage) (Subscription, error) {
+func (pubsub *natsPublisher) Subscribe(chanID string, channel Channel) error {
 	sub, err := pubsub.nc.Subscribe(fmt.Sprintf("%s.%s", prefix, chanID), func(msg *broker.Msg) {
 		if msg == nil {
 			return
@@ -43,7 +47,19 @@ func (pubsub *natsPublisher) Subscribe(chanID string, ch chan mainflux.RawMessag
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
 			return
 		}
-		ch <- rawMsg
+		channel.Messages <- rawMsg
 	})
-	return sub, err
+
+	go func() {
+		<-channel.Closed
+		for i := 0; i < 3; i++ {
+			if err := sub.Unsubscribe(); err != nil {
+				pubsub.logger.Error(fmt.Sprintf("Failed to unsubscribe from NATS %s", err.Error()))
+				continue
+			}
+			break
+		}
+		channel.Close()
+	}()
+	return err
 }

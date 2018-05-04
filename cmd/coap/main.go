@@ -48,7 +48,7 @@ func main() {
 	}
 	defer nc.Close()
 
-	pub := nats.New(nc)
+	pub := nats.New(nc, logger)
 
 	mgr := manager.NewClient(cfg.ManagerURL)
 	svc := coap.New(pub)
