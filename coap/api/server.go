@@ -67,8 +67,10 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 		Token:     msg.Token,
 		Payload:   []byte{},
 	}
-	res.SetOption(gocoap.MaxRetransmit, msg.Option(gocoap.MaxRetransmit))
-	res.SetOption(gocoap.MaxAge, msg.Option(gocoap.MaxAge))
+
+	if msg.Option(gocoap.MaxRetransmit) != nil {
+		res.SetOption(gocoap.MaxRetransmit, msg.Option(gocoap.MaxRetransmit))
+	}
 
 	switch msg.Type {
 	case gocoap.Reset:
