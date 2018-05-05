@@ -9,11 +9,6 @@ type Service interface {
 	Subscribe(string, Channel) error
 }
 
-// Subscription interface represents subscription to messaging system.
-type Subscription interface {
-	Unsubscribe() error
-}
-
 // Channel is used for receiving and sending messages.
 type Channel struct {
 	Messages chan mainflux.RawMessage

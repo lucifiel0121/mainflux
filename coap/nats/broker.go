@@ -12,13 +12,7 @@ import (
 
 var _ mainflux.MessagePublisher = (*natsPublisher)(nil)
 
-var logger log.Logger
-
-const (
-	maxFailedReqs   = 3
-	maxFailureRatio = 0.6
-	prefix          = "channel"
-)
+const prefix = "channel"
 
 type natsPublisher struct {
 	nc     *broker.Conn
@@ -52,13 +46,7 @@ func (pubsub *natsPublisher) Subscribe(chanID string, channel Channel) error {
 
 	go func() {
 		<-channel.Closed
-		for i := 0; i < 3; i++ {
-			if err := sub.Unsubscribe(); err != nil {
-				pubsub.logger.Error(fmt.Sprintf("Failed to unsubscribe from NATS %s", err.Error()))
-				continue
-			}
-			break
-		}
+		sub.Unsubscribe()
 		channel.Close()
 	}()
 	return err
