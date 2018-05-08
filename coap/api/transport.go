@@ -181,7 +181,7 @@ func sendConfirmable(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch nats.Channel) {
 	// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
 	// 24 hours. Since 24 hours is too long for our purposes, we use 12.
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(12 * time.Hour)
 	res := &gocoap.Message{
 		Type:      gocoap.NonConfirmable,
 		Code:      gocoap.Content,

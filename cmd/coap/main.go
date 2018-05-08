@@ -6,13 +6,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
 	"github.com/mainflux/mainflux"
-	manager "github.com/mainflux/mainflux/manager/client"
-
 	"github.com/mainflux/mainflux/coap"
 	"github.com/mainflux/mainflux/coap/api"
 	"github.com/mainflux/mainflux/coap/nats"
 	log "github.com/mainflux/mainflux/logger"
+	manager "github.com/mainflux/mainflux/manager/client"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
 
 	broker "github.com/nats-io/go-nats"
 )
@@ -48,13 +49,30 @@ func main() {
 	}
 	defer nc.Close()
 
-	pub := nats.New(nc, logger)
+	pubsub := nats.New(nc, logger)
+	svc := coap.New(pubsub)
+	svc = api.LoggingMiddleware(svc, logger)
 
-	mgr := manager.NewClient(cfg.ManagerURL)
-	svc := coap.New(pub)
+	svc = api.MetricsMiddleware(
+		svc,
+		kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: "ws_adapter",
+			Subsystem: "api",
+			Name:      "request_count",
+			Help:      "Number of requests received.",
+		}, []string{"method"}),
+		kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
+			Namespace: "ws_adapter",
+			Subsystem: "api",
+			Name:      "request_latency_microseconds",
+			Help:      "Total duration of requests in microseconds.",
+		}, []string{"method"}),
+	)
+
 	errs := make(chan error, 2)
 
 	go func() {
+		mgr := manager.NewClient(cfg.ManagerURL)
 		coapAddr := fmt.Sprintf(":%d", cfg.Port)
 		logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %d", cfg.Port))
 		errs <- api.ListenAndServe(svc, mgr, coapAddr, api.MakeHandler(svc))
