@@ -2,6 +2,7 @@ package coap
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -11,10 +12,24 @@ import (
 )
 
 var (
-	errBadRequest    = errors.New("bad request")
-	errBadOption     = errors.New("bad option")
 	errEntryNotFound = errors.New("observer entry not founds")
 )
+
+const (
+	// Default service transmission settings from RFC.
+	// It could be changed depending on specific use-case.
+
+	// MaxRetransmit is the maximum number of times a message will be retransmitted.
+	MaxRetransmit = 4
+	// AckRandomFactor is a multiplier for response backoff.
+	AckRandomFactor = 1.5
+	// AckTimeout is the amount of time to wait for a response.
+	AckTimeout = int(2 * time.Second)
+)
+
+// MaxTimeout is extracted to into a separate variable so there is no
+// need for it to be calculated over again.
+var MaxTimeout = int(float64(AckTimeout) * ((math.Pow(2, float64(MaxRetransmit))) - 1) * AckRandomFactor)
 
 // AdapterService struct represents CoAP adapter service implementation.
 type adapterService struct {
@@ -81,21 +96,34 @@ func (svc *adapterService) Unsubscribe(clientID string) {
 	svc.remove(clientID)
 }
 
-func (svc *adapterService) SetTimeout(clientID string, timer *time.Timer) error {
+func (svc *adapterService) SetTimeout(clientID string, timer *time.Timer, duration int) (chan bool, error) {
 	sub, ok := svc.get(clientID)
 	if !ok {
-		return errEntryNotFound
+		return nil, errEntryNotFound
 	}
 	go func() {
-		select {
-		case <-sub.Timer:
-			timer.Stop()
-		case <-timer.C:
-			timer.Stop()
-			svc.Unsubscribe(clientID)
+		for {
+			select {
+			case _, ok := <-sub.Timer:
+				timer.Stop()
+				if ok {
+					sub.Notify <- false
+				}
+				return
+			case <-timer.C:
+				duration *= 2
+				if duration >= MaxTimeout {
+					timer.Stop()
+					sub.Notify <- false
+					svc.Unsubscribe(clientID)
+					return
+				}
+				timer.Reset(time.Duration(duration))
+				sub.Notify <- true
+			}
 		}
 	}()
-	return nil
+	return sub.Notify, nil
 }
 
 func (svc *adapterService) RemoveTimeout(clientID string) {

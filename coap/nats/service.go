@@ -14,6 +14,7 @@ type Channel struct {
 	Messages chan mainflux.RawMessage
 	Closed   chan bool
 	Timer    chan bool
+	Notify   chan bool
 }
 
 // Close channel and stop message transfer.
@@ -21,4 +22,5 @@ func (channel Channel) Close() {
 	close(channel.Messages)
 	close(channel.Closed)
 	close(channel.Timer)
+	close(channel.Notify)
 }

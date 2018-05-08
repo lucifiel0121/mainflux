@@ -34,11 +34,6 @@ const (
 const (
 	// Approximately number of supported requests per second
 	timestamp = int64(time.Millisecond) * 31
-	// Default transmission settings from RFC.
-	defaultMaxRetransmit   = 4
-	defaultAckRandomFactor = 1.5
-	defaultAckTimeout      = int(2000 * time.Millisecond)
-	maxTimeout             = int(float64(defaultAckTimeout) * defaultAckRandomFactor)
 )
 
 type handler func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message
@@ -135,6 +130,7 @@ func observe(svc coap.Service) handler {
 				Messages: make(chan mainflux.RawMessage),
 				Closed:   make(chan bool),
 				Timer:    make(chan bool),
+				Notify:   make(chan bool),
 			}
 			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
 			if err := svc.Subscribe(cid, id, ch); err != nil {
@@ -148,50 +144,44 @@ func observe(svc coap.Service) handler {
 	}
 }
 
-func sendConfirmable(seed int64, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, timer *time.Timer) error {
-	var err error
-	rand.Seed(seed)
-	timeout := time.Duration((rand.Intn(maxTimeout-defaultAckTimeout) + defaultAckTimeout))
-	// Try to transmit MAX_RETRANSMITION times; every attempt duplicates timeout between transmission.
-	max := defaultMaxRetransmit
-	if value, ok := msg.Option(gocoap.MaxRetransmit).(int); ok {
-		max = value
-	} else {
-		msg.SetOption(gocoap.MaxRetransmit, defaultMaxRetransmit)
-	}
-
-	for i := 0; i < max; i++ {
-		err = gocoap.Transmit(conn, addr, *msg)
-		if err != nil {
-			timer.Reset(time.Duration(timeout))
-			time.Sleep(timeout)
-			timeout *= 2
-			continue
-		}
-		return nil
-	}
-	return err
-}
-
-func sendMessage(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, timer *time.Timer) error {
-	var err error
+func sendMessage(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
 	buff := new(bytes.Buffer)
 	now := time.Now().UnixNano() / timestamp
-	if err = binary.Write(buff, binary.BigEndian, now); err != nil {
+	if err := binary.Write(buff, binary.BigEndian, now); err != nil {
 		return err
 	}
 	observeVal := buff.Bytes()
 	msg.SetOption(gocoap.Observe, observeVal[len(observeVal)-3:])
 	if msg.IsConfirmable() {
-		return sendConfirmable(now, conn, addr, msg, timer)
+		timer := time.NewTimer(time.Duration(coap.AckTimeout))
+		ch, err := svc.SetTimeout(id, timer, coap.AckTimeout)
+		if err != nil {
+			return err
+		}
+		return sendConfirmable(conn, addr, msg, ch)
 	}
 	return gocoap.Transmit(conn, addr, *msg)
+}
+
+func sendConfirmable(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan bool) error {
+	msg.SetOption(gocoap.MaxRetransmit, coap.MaxRetransmit)
+	// Try to transmit MAX_RETRANSMITION times; every attempt duplicates timeout between transmission.
+	for i := 0; i < coap.MaxRetransmit; i++ {
+		if err := gocoap.Transmit(conn, addr, *msg); err != nil {
+			return err
+		}
+		state, ok := <-ch
+		if !state || !ok {
+			return nil
+		}
+	}
+	return nil
 }
 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch nats.Channel) {
 	// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
 	// 24 hours. Since 24 hours is too long for our purposes, we use 12.
-	ticker := time.NewTicker(12 * time.Hour)
+	ticker := time.NewTicker(5 * time.Second)
 	res := &gocoap.Message{
 		Type:      gocoap.NonConfirmable,
 		Code:      gocoap.Content,
@@ -207,9 +197,9 @@ loop:
 		select {
 		case <-ticker.C:
 			res.Type = gocoap.Confirmable
-			timer := time.NewTimer(time.Duration(defaultAckTimeout))
-			svc.SetTimeout(id, timer)
-			if err := sendMessage(conn, addr, res, timer); err != nil {
+			rand.Seed(time.Now().UnixNano())
+			if err := sendMessage(svc, id, conn, addr, res); err != nil {
+				svc.Unsubscribe(id)
 				break loop
 			}
 		case rawMsg, ok := <-ch.Messages:
@@ -218,8 +208,7 @@ loop:
 			}
 			res.Type = gocoap.NonConfirmable
 			res.Payload = rawMsg.Payload
-			if err := sendMessage(conn, addr, res, nil); err != nil {
-				svc.Unsubscribe(id)
+			if err := sendMessage(svc, id, conn, addr, res); err != nil {
 				break loop
 			}
 		}
