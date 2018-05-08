@@ -158,30 +158,30 @@ func sendMessage(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAd
 		if err != nil {
 			return err
 		}
-		return sendConfirmable(conn, addr, msg, ch)
+		go sendConfirmable(conn, addr, msg, ch)
 	}
 	return gocoap.Transmit(conn, addr, *msg)
 }
 
-func sendConfirmable(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan bool) error {
+func sendConfirmable(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan bool) {
 	msg.SetOption(gocoap.MaxRetransmit, coap.MaxRetransmit)
 	// Try to transmit MAX_RETRANSMITION times; every attempt duplicates timeout between transmission.
 	for i := 0; i < coap.MaxRetransmit; i++ {
 		if err := gocoap.Transmit(conn, addr, *msg); err != nil {
-			return err
+			return
 		}
 		state, ok := <-ch
 		if !state || !ok {
-			return nil
+			return
 		}
 	}
-	return nil
+	return
 }
 
 func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch nats.Channel) {
 	// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
 	// 24 hours. Since 24 hours is too long for our purposes, we use 12.
-	ticker := time.NewTicker(12 * time.Hour)
+	ticker := time.NewTicker(4 * time.Second)
 	res := &gocoap.Message{
 		Type:      gocoap.NonConfirmable,
 		Code:      gocoap.Content,
@@ -192,26 +192,28 @@ func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr
 	res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 	res.SetOption(gocoap.LocationPath, msg.Path())
 
-loop:
 	for {
 		select {
 		case <-ticker.C:
+			ticker.Stop()
 			res.Type = gocoap.Confirmable
 			rand.Seed(time.Now().UnixNano())
 			if err := sendMessage(svc, id, conn, addr, res); err != nil {
-				svc.Unsubscribe(id)
-				break loop
+				// svc.Unsubscribe(id)
+				ticker.Stop()
+				return
 			}
 		case rawMsg, ok := <-ch.Messages:
 			if !ok {
-				break loop
+				ticker.Stop()
+				return
 			}
 			res.Type = gocoap.NonConfirmable
 			res.Payload = rawMsg.Payload
 			if err := sendMessage(svc, id, conn, addr, res); err != nil {
-				break loop
+				ticker.Stop()
+				return
 			}
 		}
 	}
-	ticker.Stop()
 }
