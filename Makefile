@@ -9,7 +9,11 @@ define compile_service
 endef
 
 define make_docker
-	docker build --build-arg SVC_NAME=$(subst docker_,,$(1)) --tag=mainflux/$(subst docker_,,$(1)) -f docker/Dockerfile .
+	docker build --no-cache --build-arg SVC_NAME=$(subst docker_,,$(1)) --tag=mainflux/$(subst docker_,,$(1)) -f docker/Dockerfile .
+endef
+
+define make_docker_dev
+	docker build --build-arg SVC_NAME=$(1) --tag=mainflux/$(1) -f docker/Dockerfile.dev ./build/
 endef
 
 all: $(SERVICES) mqtt
@@ -38,6 +42,11 @@ $(DOCKERS):
 dockers: $(DOCKERS)
 	docker build --tag=mainflux/dashflux -f dashflux/docker/Dockerfile dashflux
 	docker build --tag=mainflux/mqtt -f mqtt/Dockerfile .
+
+dockers_dev:
+	for svc in $(SERVICES); do \
+		$(call make_docker_dev,$$svc); \
+	done
 
 mqtt:
 	cd mqtt && npm install
