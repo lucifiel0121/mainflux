@@ -1,5 +1,5 @@
 BUILD_DIR = build
-SERVICES = users things http normalizer ws influxdb mongodb-writer mongodb-reader cassandra-writer cassandra-reader cli
+SERVICES = users things http normalizer ws influxdb-writer influxdb-reader mongodb-writer mongodb-reader cassandra-writer cassandra-reader cli
 DOCKERS = $(addprefix docker_,$(SERVICES))
 DOCKERS_DEV = $(addprefix docker_dev_,$(SERVICES))
 CGO_ENABLED ?= 0
@@ -28,10 +28,13 @@ clean:
 install:
 	cp ${BUILD_DIR}/* $(GOBIN)
 
+test:
+	GOCACHE=off go test -v -race -tags test $(shell go list ./... | grep -v 'vendor\|cmd')
+
 proto:
 	protoc --go_out=plugins=grpc:. *.proto
 
-$(SERVICES): proto
+$(SERVICES):
 	$(call compile_service,$(@))
 
 $(DOCKERS):
