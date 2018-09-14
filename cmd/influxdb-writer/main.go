@@ -31,8 +31,8 @@ const (
 
 	defNatsURL      = nats.DefaultURL
 	defPort         = "8180"
-	defBatchSize    = 5000
-	defBatchTimeout = 5
+	defBatchSize    = "5000"
+	defBatchTimeout = "5"
 	defPointName    = "messages"
 	defDBName       = "mainflux"
 	defDBHost       = "localhost"
@@ -64,8 +64,8 @@ type config struct {
 }
 
 func main() {
-	cfg, clientCfg := loadConfigs()
 	logger := log.New(os.Stdout)
+	cfg, clientCfg := loadConfigs(logger)
 
 	nc, err := nats.Connect(cfg.NatsURL)
 	if err != nil {
@@ -108,7 +108,7 @@ func main() {
 	logger.Error(fmt.Sprintf("InfluxDB writer service terminated: %s", err))
 }
 
-func loadConfigs() (config, influxdata.HTTPConfig) {
+func loadConfigs(logger log.Logger) (config, influxdata.HTTPConfig) {
 	cfg := config{
 		NatsURL: mainflux.Env(envNatsURL, defNatsURL),
 		Port:    mainflux.Env(envPort, defPort),
@@ -118,8 +118,18 @@ func loadConfigs() (config, influxdata.HTTPConfig) {
 		DBUser:  mainflux.Env(envDBUser, defDBUser),
 		DBPass:  mainflux.Env(envDBPass, defDBPass),
 	}
-	cfg.BatchSize = parseInt(mainflux.Env(envBatchSize, ""), defBatchSize)
-	cfg.BatchTimeout = parseInt(mainflux.Env(envBatchTimeout, ""), defBatchTimeout)
+	var err error
+	cfg.BatchSize, err = strconv.Atoi(mainflux.Env(envBatchSize, defBatchSize))
+	if err != nil {
+		logger.Error(fmt.Sprintf("Invalid value of batch size: %s", err))
+		os.Exit(1)
+	}
+
+	cfg.BatchTimeout, err = strconv.Atoi(mainflux.Env(envBatchTimeout, defBatchTimeout))
+	if err != nil {
+		logger.Error(fmt.Sprintf("Invalid value for batch timeout: %s", err))
+		os.Exit(1)
+	}
 
 	clientCfg := influxdata.HTTPConfig{
 		Addr:     fmt.Sprintf("http://%s:%s", cfg.DBHost, cfg.DBPort),
@@ -128,14 +138,6 @@ func loadConfigs() (config, influxdata.HTTPConfig) {
 	}
 
 	return cfg, clientCfg
-}
-
-func parseInt(val string, def int) int {
-	ret, err := strconv.Atoi(val)
-	if err != nil {
-		return def
-	}
-	return ret
 }
 
 func makeMetrics() (*kitprometheus.Counter, *kitprometheus.Summary) {
