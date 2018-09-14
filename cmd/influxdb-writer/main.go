@@ -81,7 +81,8 @@ func main() {
 	}
 	defer client.Close()
 
-	repo, err := influxdb.New(client, cfg.DBName, cfg.BatchSize, time.Duration(cfg.BatchTimeout)*time.Second)
+	timeout := time.Duration(cfg.BatchTimeout) * time.Second
+	repo, err := influxdb.New(client, cfg.DBName, cfg.BatchSize, timeout)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Failed to create InfluxDB writer: %s", err))
 		os.Exit(1)
@@ -160,6 +161,6 @@ func makeMetrics() (*kitprometheus.Counter, *kitprometheus.Summary) {
 
 func startHTTPService(port string, logger log.Logger, errs chan error) {
 	p := fmt.Sprintf(":%s", port)
-	logger.Info(fmt.Sprintf("Influxdb writer service started, exposed port %s", p))
+	logger.Info(fmt.Sprintf("InfluxDB writer service started, exposed port %s", p))
 	errs <- http.ListenAndServe(p, influxdb.MakeHandler())
 }
