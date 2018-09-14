@@ -33,8 +33,8 @@ default values.
     environment:
       MF_NATS_URL: [NATS instance URL]
       MF_INFLUX_WRITER_PORT: [Service HTTP port]
-      MF_INFLUX_WRITER_BATCH_SIZE: [Size of the batch of the points]
-      MF_INFLUX_WRITER_BATCH_TIMEOUT: [Time interval in seconds for writing batch to the database]
+      MF_INFLUX_WRITER_BATCH_SIZE: [Size of the writer points batch]
+      MF_INFLUX_WRITER_BATCH_TIMEOUT: [Time interval in seconds to flush the batch]
       MF_INFLUX_WRITER_DB_NAME: [InfluxDB name]
       MF_INFLUX_WRITER_DB_HOST: [InfluxDB host]
       MF_INFLUX_WRITER_DB_PORT: [InfluxDB port]
@@ -60,7 +60,7 @@ make influxdb
 make install
 
 # Set the environment variables and run the service
-MF_NATS_URL=[NATS instance URL] MF_INFLUX_WRITER_PORT=[Service HTTP port] MF_INFLUX_WRITER_BATCH_SIZE=[Size of the writer points batch] MF_INFLUX_WRITER_BATCH_TIMEOUT=[Time interval to flush the batch] MF_INFLUX_WRITER_DB_NAME=[InfluxDB database name] MF_INFLUX_WRITER_DB_HOST=[InfluxDB database host] MF_INFLUX_WRITER_DB_PORT=[InfluxDB database port] MF_INFLUX_WRITER_DB_USER=[InfluxDB admin user] MF_INFLUX_WRITER_DB_PASS=[InfluxDB admin password] $GOBIN/mainflux-influxdb
+MF_NATS_URL=[NATS instance URL] MF_INFLUX_WRITER_PORT=[Service HTTP port] MF_INFLUX_WRITER_BATCH_SIZE=[Size of the writer points batch] MF_INFLUX_WRITER_BATCH_TIMEOUT=[Time interval in seconds to flush the batch] MF_INFLUX_WRITER_DB_NAME=[InfluxDB database name] MF_INFLUX_WRITER_DB_HOST=[InfluxDB database host] MF_INFLUX_WRITER_DB_PORT=[InfluxDB database port] MF_INFLUX_WRITER_DB_USER=[InfluxDB admin user] MF_INFLUX_WRITER_DB_PASS=[InfluxDB admin password] $GOBIN/mainflux-influxdb
 
 ```
 

@@ -61,9 +61,11 @@ func (repo *influxRepo) save() error {
 	defer repo.mu.Unlock()
 	bp, _ := influxdata.NewBatchPoints(repo.cfg)
 	bp.AddPoints(repo.batch)
+
 	if err := repo.client.Write(bp); err != nil {
 		return err
 	}
+
 	repo.batch = []*influxdata.Point{}
 	return nil
 }
@@ -74,6 +76,7 @@ func (repo *influxRepo) Save(msg mainflux.Message) error {
 	if err != nil {
 		return err
 	}
+
 	repo.add(pt)
 	return nil
 }
@@ -82,6 +85,7 @@ func (repo *influxRepo) add(pt *influxdata.Point) {
 	repo.mu.Lock()
 	repo.batch = append(repo.batch, pt)
 	repo.mu.Unlock()
+
 	if len(repo.batch)%repo.batchSize == 0 {
 		repo.save()
 	}
@@ -92,6 +96,7 @@ func (repo *influxRepo) tagsOf(msg *mainflux.Message) tags {
 	update := strconv.FormatFloat(msg.UpdateTime, 'f', -1, 64)
 	channel := strconv.FormatUint(msg.Channel, 10)
 	publisher := strconv.FormatUint(msg.Publisher, 10)
+
 	return tags{
 		"Channel":    channel,
 		"Publisher":  publisher,

@@ -33,7 +33,6 @@ const (
 	defPort         = "8180"
 	defBatchSize    = "5000"
 	defBatchTimeout = "5"
-	defPointName    = "messages"
 	defDBName       = "mainflux"
 	defDBHost       = "localhost"
 	defDBPort       = "8086"
@@ -119,6 +118,7 @@ func loadConfigs(logger log.Logger) (config, influxdata.HTTPConfig) {
 		DBUser:  mainflux.Env(envDBUser, defDBUser),
 		DBPass:  mainflux.Env(envDBPass, defDBPass),
 	}
+
 	var err error
 	cfg.BatchSize, err = strconv.Atoi(mainflux.Env(envBatchSize, defBatchSize))
 	if err != nil {

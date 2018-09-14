@@ -30,10 +30,12 @@ var (
 	streamsSize   = 250
 	client        influxdata.Client
 	q             = fmt.Sprintf("SELECT * FROM test..messages\n")
-	clientCfg     = influxdata.HTTPConfig{
+
+	clientCfg = influxdata.HTTPConfig{
 		Username: "test",
 		Password: "test",
 	}
+
 	msg = mainflux.Message{
 		Channel:     45,
 		Publisher:   2580,
@@ -73,13 +75,13 @@ func TestSave(t *testing.T) {
 	client, err := influxdata.NewHTTPClient(clientCfg)
 	require.Nil(t, err, fmt.Sprintf("Creating new InfluxDB client expected to succeed: %s.\n", err))
 
+	// Set batch size to 1 to simulate single point insert.
 	repo, err := writer.New(client, testDB, 1, saveTimeout)
 	require.Nil(t, err, fmt.Sprintf("Creating new InfluxDB repo expected to succeed: %s.\n", err))
 
 	err = repo.Save(msg)
 	assert.Nil(t, err, fmt.Sprintf("Save operation expected to succeed: %s.\n", err))
 
-	time.Sleep(1 * time.Second)
 	row, err := queryDB(q)
 	assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
 
@@ -102,7 +104,7 @@ func TestBatchSave(t *testing.T) {
 	assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
 	time.Sleep(time.Second)
 	count := len(row)
-	// Add one because of previous test.
+	// Add one because of previous the test.
 	size := streamsSize - (streamsSize % saveBatchSize) + 1
 	assert.Equal(t, size, count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", size, count))
 
@@ -112,7 +114,7 @@ func TestBatchSave(t *testing.T) {
 	row, err = queryDB(q)
 	assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
 	count = len(row)
-	// Add one because of previous test.
+	// Add one because of previous the test.
 	size = streamsSize + 1
 	assert.Equal(t, size, count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", size, count))
 }
