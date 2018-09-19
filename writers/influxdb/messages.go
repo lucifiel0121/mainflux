@@ -59,7 +59,11 @@ func New(client influxdata.Client, database string, batchSize int, batchTimeout 
 func (repo *influxRepo) save() error {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
-	bp, _ := influxdata.NewBatchPoints(repo.cfg)
+	bp, err := influxdata.NewBatchPoints(repo.cfg)
+	if err != nil {
+		return err
+	}
+
 	bp.AddPoints(repo.batch)
 
 	if err := repo.client.Write(bp); err != nil {
@@ -77,18 +81,14 @@ func (repo *influxRepo) Save(msg mainflux.Message) error {
 		return err
 	}
 
-	repo.add(pt)
-	return nil
-}
-
-func (repo *influxRepo) add(pt *influxdata.Point) {
 	repo.mu.Lock()
 	repo.batch = append(repo.batch, pt)
 	repo.mu.Unlock()
 
 	if len(repo.batch)%repo.batchSize == 0 {
-		repo.save()
+		return repo.save()
 	}
+	return nil
 }
 
 func (repo *influxRepo) tagsOf(msg *mainflux.Message) tags {
