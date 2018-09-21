@@ -16,6 +16,7 @@ import (
 	influxdata "github.com/influxdata/influxdb/client/v2"
 	"github.com/mainflux/mainflux"
 	log "github.com/mainflux/mainflux/logger"
+	"github.com/mainflux/mainflux/writers"
 	writer "github.com/mainflux/mainflux/writers/influxdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,8 @@ var (
 	saveBatchSize = 20
 	streamsSize   = 250
 	client        influxdata.Client
-	q             = fmt.Sprintf("SELECT * FROM test..messages\n")
+	selectMsgs    = fmt.Sprintf("SELECT * FROM test..messages")
+	dropMsgs      = fmt.Sprintf("DROP SERIES FROM messages")
 
 	clientCfg = influxdata.HTTPConfig{
 		Username: "test",
@@ -66,6 +68,9 @@ func queryDB(cmd string) ([][]interface{}, error) {
 	if response.Error() != nil {
 		return nil, response.Error()
 	}
+	if len(response.Results[0].Series) == 0 {
+		return nil, nil
+	}
 	// There is only one query, so only one result and
 	// all data are stored in the same series.
 	return response.Results[0].Series[0].Values, nil
@@ -79,41 +84,58 @@ func TestSave(t *testing.T) {
 	repo, err := writer.New(client, testDB, 1, saveTimeout)
 	require.Nil(t, err, fmt.Sprintf("Creating new InfluxDB repo expected to succeed: %s.\n", err))
 
-	err = repo.Save(msg)
-	assert.Nil(t, err, fmt.Sprintf("Save operation expected to succeed: %s.\n", err))
-
-	row, err := queryDB(q)
-	assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
-
-	count := len(row)
-	assert.Equal(t, 1, count, fmt.Sprintf("Expected to have 1 value, found %d instead.\n", count))
-}
-
-func TestBatchSave(t *testing.T) {
-	client, err := influxdata.NewHTTPClient(clientCfg)
-	require.Nil(t, err, fmt.Sprintf("Creating new InfluxDB client expected to succeed: %s.\n", err))
-
-	repo, err := writer.New(client, testDB, saveBatchSize, saveTimeout)
+	// Set batch size to value > 1 to simulate real batch.
+	repo1, err := writer.New(client, testDB, saveBatchSize, saveTimeout)
 	require.Nil(t, err, fmt.Sprintf("Creating new InfluxDB repo expected to succeed: %s.\n", err))
 
-	for i := 0; i < streamsSize; i++ {
-		repo.Save(msg)
+	cases := []struct {
+		desc         string
+		repo         writers.MessageRepository
+		previousMsgs int
+		numOfMsg     int
+		expectedSize int
+		isBatch      bool
+	}{
+		{
+			desc:         "save a single message",
+			repo:         repo,
+			numOfMsg:     1,
+			expectedSize: 1,
+			isBatch:      false,
+		},
+		{
+			desc:         "save a batch of messages",
+			repo:         repo1,
+			numOfMsg:     streamsSize,
+			expectedSize: streamsSize - (streamsSize % saveBatchSize),
+			isBatch:      true,
+		},
 	}
 
-	row, err := queryDB(q)
-	assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
-	count := len(row)
-	// Add one because of the previous test.
-	size := streamsSize - (streamsSize % saveBatchSize) + 1
-	assert.Equal(t, size, count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", size, count))
+	for _, tc := range cases {
+		// Clean previously saved messages.
+		row, err := queryDB(dropMsgs)
+		require.Nil(t, err, fmt.Sprintf("Cleaning data from InfluxDB expected to succeed: %s.\n", err))
 
-	// Sleep for `saveBatchTime` to trigger ticker and check if the reset of the data is saved.
-	time.Sleep(saveTimeout)
+		for i := 0; i < tc.numOfMsg; i++ {
+			err := tc.repo.Save(msg)
+			assert.Nil(t, err, fmt.Sprintf("Save operation expected to succeed: %s.\n", err))
+		}
 
-	row, err = queryDB(q)
-	assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
-	count = len(row)
-	// Add one because of the previous test.
-	size = streamsSize + 1
-	assert.Equal(t, size, count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", size, count))
+		row, err = queryDB(selectMsgs)
+		assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data expected to succeed: %s.\n", err))
+
+		count := len(row)
+		assert.Equal(t, tc.expectedSize, count, fmt.Sprintf("Expected to have %d messages saved, found %d instead.\n", tc.expectedSize, count))
+
+		if tc.isBatch {
+			// Sleep for `saveBatchTime` to trigger ticker and check if the reset of the data is saved.
+			time.Sleep(saveTimeout)
+
+			row, err = queryDB(selectMsgs)
+			assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
+			count = len(row)
+			assert.Equal(t, tc.numOfMsg, count, fmt.Sprintf("Expected to have %d messages, found %d instead.\n", tc.numOfMsg, count))
+		}
+	}
 }
