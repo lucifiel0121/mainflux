@@ -25,7 +25,7 @@ var (
 	port          string
 	testLog       = log.New(os.Stdout)
 	testDB        = "test"
-	saveTimeout   = 5 * time.Second
+	saveTimeout   = 2 * time.Second
 	saveBatchSize = 20
 	streamsSize   = 250
 	client        influxdata.Client
@@ -102,19 +102,18 @@ func TestBatchSave(t *testing.T) {
 
 	row, err := queryDB(q)
 	assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
-	time.Sleep(time.Second)
 	count := len(row)
-	// Add one because of previous the test.
+	// Add one because of the previous test.
 	size := streamsSize - (streamsSize % saveBatchSize) + 1
 	assert.Equal(t, size, count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", size, count))
 
-	// Sleep for `saveBatchTime` to trigger timer and check if data is saved.
+	// Sleep for `saveBatchTime` to trigger ticker and check if the reset of the data is saved.
 	time.Sleep(saveTimeout)
 
 	row, err = queryDB(q)
 	assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
 	count = len(row)
-	// Add one because of previous the test.
+	// Add one because of the previous test.
 	size = streamsSize + 1
 	assert.Equal(t, size, count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", size, count))
 }
