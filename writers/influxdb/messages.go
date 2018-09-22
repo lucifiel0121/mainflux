@@ -70,6 +70,9 @@ func (repo *influxRepo) save() error {
 		return err
 	}
 
+	// It would be nice to reset ticker at this point, which
+	// implies creating a new ticker and goroutine. It would
+	// introduce unnecessary complexity with no justified benefits.
 	repo.batch = []*influxdata.Point{}
 	return nil
 }
