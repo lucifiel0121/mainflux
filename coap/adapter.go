@@ -34,7 +34,6 @@ var (
 	// ErrFailedConnection indicates that service couldn't connect to message broker.
 	ErrFailedConnection = errors.New("failed to connect to message broker")
 
-	// extracted to avoid recomputation
 	maxTimeout = int(float64(AckTimeout) * ((math.Pow(2, float64(MaxRetransmit))) - 1) * responseBackoffMultiplier)
 )
 
@@ -111,7 +110,7 @@ func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 
 func (svc *adapterService) Subscribe(chanID uint64, clientID string, ch nats.Channel) error {
 	// Remove entry if already exists.
-	svc.Unsubscribe(clientID)
+	svc.remove(clientID)
 	if err := svc.pubsub.Subscribe(chanID, ch); err != nil {
 		return ErrFailedSubscription
 	}

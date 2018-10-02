@@ -26,7 +26,7 @@ func LoggingMiddleware(svc coap.Service, logger log.Logger) coap.Service {
 
 func (lm *loggingMiddleware) Publish(msg mainflux.RawMessage) (err error) {
 	defer func(begin time.Time) {
-		message := fmt.Sprintf("Method publish to channel %s took %s to complete", msg.Channel, time.Since(begin))
+		message := fmt.Sprintf("Method publish to channel %d took %s to complete", msg.Channel, time.Since(begin))
 		if err != nil {
 			lm.logger.Warn(fmt.Sprintf("%s with error: %s.", message, err))
 			return
@@ -39,7 +39,7 @@ func (lm *loggingMiddleware) Publish(msg mainflux.RawMessage) (err error) {
 
 func (lm *loggingMiddleware) Subscribe(chanID uint64, clientID string, channel nats.Channel) (err error) {
 	defer func(begin time.Time) {
-		message := fmt.Sprintf("Method subscribe to channel %s took %s to complete", chanID, time.Since(begin))
+		message := fmt.Sprintf("Method subscribe to channel %d took %s to complete", chanID, time.Since(begin))
 		if err != nil {
 			lm.logger.Warn(fmt.Sprintf("%s with error: %s.", message, err))
 			return

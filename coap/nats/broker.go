@@ -29,7 +29,7 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	return pubsub.nc.Publish(fmt.Sprintf("%s.%s", prefix, msg.Channel), data)
+	return pubsub.nc.Publish(fmt.Sprintf("%s.%d", prefix, msg.Channel), data)
 }
 
 func (pubsub *natsPublisher) Subscribe(chanID uint64, channel Channel) error {
@@ -37,6 +37,7 @@ func (pubsub *natsPublisher) Subscribe(chanID uint64, channel Channel) error {
 		if msg == nil {
 			return
 		}
+
 		var rawMsg mainflux.RawMessage
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
 			return

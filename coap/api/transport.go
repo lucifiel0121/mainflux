@@ -139,7 +139,7 @@ func observe(svc coap.Service) handler {
 		}
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 1 {
-			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
+			id := fmt.Sprintf("%d-%x", publisher, msg.Token)
 			svc.Unsubscribe(id)
 		}
 
@@ -150,7 +150,7 @@ func observe(svc coap.Service) handler {
 				Timer:    make(chan bool),
 				Notify:   make(chan bool),
 			}
-			id := fmt.Sprintf("%s-%x", publisher, msg.Token)
+			id := fmt.Sprintf("%d-%x", publisher, msg.Token)
 			if err := svc.Subscribe(cid, id, ch); err != nil {
 				res.Code = gocoap.InternalServerError
 				return res

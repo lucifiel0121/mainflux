@@ -86,8 +86,8 @@ func main() {
 	errs := make(chan error, 2)
 
 	go func() {
-		p := fmt.Sprintf(":%d", cfg.Port)
-		logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %d", cfg.Port))
+		p := fmt.Sprintf(":%s", cfg.Port)
+		logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %s", cfg.Port))
 		errs <- api.ListenAndServe(svc, cc, p)
 	}()
 

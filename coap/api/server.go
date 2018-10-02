@@ -12,6 +12,8 @@ import (
 	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/coap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -49,19 +51,19 @@ func authorize(msg *gocoap.Message, res *gocoap.Message, cid uint64) (uint64, er
 
 	id, err := auth.CanAccess(ctx, &mainflux.AccessReq{Token: key, ChanID: cid})
 
-	// if err != nil {
-	// 	e, ok := status.FromError(err)
-	// 	if ok {
-	// 		switch e.Code() {
-	// 		case codes.PermissionDenied:
-	// 			res.Code = gocoap.Forbidden
-	// 		default:
-	// 			res.Code = gocoap.ServiceUnavailable
-	// 		}
-	// 		return 0, err
-	// 	}
-	// 	res.Code = gocoap.InternalServerError
-	// }
+	if err != nil {
+		e, ok := status.FromError(err)
+		if ok {
+			switch e.Code() {
+			case codes.PermissionDenied:
+				res.Code = gocoap.Forbidden
+			default:
+				res.Code = gocoap.ServiceUnavailable
+			}
+			return 0, err
+		}
+		res.Code = gocoap.InternalServerError
+	}
 	return id.GetValue(), nil
 }
 
@@ -94,7 +96,7 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 		if err != nil {
 			break
 		}
-		id := fmt.Sprintf("%s-%x", publisher, msg.Token)
+		id := fmt.Sprintf("%d-%x", publisher, msg.Token)
 		svc.RemoveTimeout(id)
 		svc.Unsubscribe(id)
 	case gocoap.Acknowledgement:
@@ -108,7 +110,7 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 		if err != nil {
 			break
 		}
-		id := fmt.Sprintf("%s-%x", publisher, msg.Token)
+		id := fmt.Sprintf("%d-%x", publisher, msg.Token)
 		svc.RemoveTimeout(id)
 	default:
 		res = rh.ServeCOAP(conn, addr, &msg)
