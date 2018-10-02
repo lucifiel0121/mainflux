@@ -133,7 +133,6 @@ func observe(svc coap.Service) handler {
 		}
 
 		publisher, err := authorize(msg, res, cid)
-
 		if err != nil {
 			return res
 		}

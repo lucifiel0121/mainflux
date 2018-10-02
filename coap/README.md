@@ -9,11 +9,12 @@ The service is configured using the environment variables presented in the
 following table. Note that any unset variables will be replaced with their
 default values.
 
-| Variable              | Description            | Default               |
-|-----------------------|------------------------|-----------------------|
-| MF_COAP_ADAPTER_PORT  | Service listening port | 5683                  |
-| MF_NATS_URL           | NATS instance URL      | nats://localhost:4222 |
-| MF_THINGS_URL         | Things service URL     | localhost:8181        |
+| Variable                  | Description            | Default               |
+|---------------------------|------------------------|-----------------------|
+| MF_COAP_ADAPTER_PORT      | Service listening port | 5683                  |
+| MF_NATS_URL               | NATS instance URL      | nats://localhost:4222 |
+| MF_THINGS_URL             | Things service URL     | localhost:8181        |
+| MF_COAP_ADAPTER_LOG_LEVEL | Service log level      | error                 |
 
 ## Deployment
 
@@ -32,6 +33,7 @@ services:
       MF_COAP_ADAPTER_PORT: [Service HTTP port]
       MF_NATS_URL: [NATS instance URL]
       MF_THINGS_URL: [Things service URL]
+      MF_COAP_ADAPTER_LOG_LEVEL: [Service log level]
 ```
 
 Running this service outside of container requires working instance of the NATS service.
@@ -50,7 +52,7 @@ make coap
 make install
 
 # set the environment variables and run the service
-MF_THINGS_URL=[Things service URL] MF_NATS_URL=[NATS instance URL] MF_COAP_ADAPTER_PORT=[Service HTTP port] $GOBIN/mainflux-coap
+MF_THINGS_URL=[Things service URL] MF_NATS_URL=[NATS instance URL] MF_COAP_ADAPTER_PORT=[Service HTTP port] MF_COAP_ADAPTER_LOG_LEVEL=[Service log level] $GOBIN/mainflux-coap
 ```
 
 ## Usage
