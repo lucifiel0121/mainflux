@@ -54,15 +54,14 @@ func notFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 	return nil
 }
 
-func version(port string) {
+//MakeHTTPHandler creates handler for version endpoint.
+func MakeHTTPHandler() http.Handler {
 	b := bone.New()
 	b.GetFunc("/version", mainflux.Version("CoAP"))
-	http.ListenAndServe(port, b)
+	return b
 }
 
 func makeHandler(port string, svc coap.Service) gocoap.Handler {
-	go version(port)
-
 	r := mux.NewRouter()
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)

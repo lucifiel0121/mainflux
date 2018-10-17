@@ -10,6 +10,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -92,6 +93,8 @@ func main() {
 
 	errs := make(chan error, 2)
 
+	go startHTTPServer(cfg.Port, logger, errs)
+
 	go func() {
 		p := fmt.Sprintf(":%s", cfg.Port)
 		logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %s", cfg.Port))
@@ -115,4 +118,10 @@ func loadConfig() config {
 		Port:      mainflux.Env(envPort, defPort),
 		LogLevel:  mainflux.Env(envLogLevel, defLogLevel),
 	}
+}
+
+func startHTTPServer(port string, logger logger.Logger, errs chan error) {
+	p := fmt.Sprintf(":%s", port)
+	logger.Info(fmt.Sprintf("Things service started, exposed port %s", port))
+	errs <- http.ListenAndServe(p, api.MakeHTTPHandler())
 }
