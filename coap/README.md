@@ -25,7 +25,7 @@ a compose file template that can be used to deploy the service container locally
 version: "2"
 services:
   adapter:
-    image: mainflux/coap-adapter:[version]
+    image: mainflux/coap:[version]
     container_name: [instance name]
     ports:
       - [host machine port]:[configured port]
