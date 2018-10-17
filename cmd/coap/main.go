@@ -28,15 +28,15 @@ import (
 )
 
 const (
-	defPort      string = "5683"
-	defNatsURL   string = broker.DefaultURL
-	defThingsURL string = "localhost:8181"
-	defLogLevel  string = "error"
+	defPort      = "5683"
+	defNatsURL   = broker.DefaultURL
+	defThingsURL = "localhost:8181"
+	defLogLevel  = "error"
 
-	envPort      string = "MF_COAP_ADAPTER_PORT"
-	envNatsURL   string = "MF_NATS_URL"
-	envThingsURL string = "MF_THINGS_URL"
-	envLogLevel  string = "MF_COAP_ADAPTER_LOG_LEVEL"
+	envPort      = "MF_COAP_ADAPTER_PORT"
+	envNatsURL   = "MF_NATS_URL"
+	envThingsURL = "MF_THINGS_URL"
+	envLogLevel  = "MF_COAP_ADAPTER_LOG_LEVEL"
 )
 
 type config struct {
