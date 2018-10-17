@@ -1,3 +1,10 @@
+//
+// Copyright (c) 2018
+// Mainflux
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 // Package coap contains the domain concept definitions needed to support
 // Mainflux coap adapter service functionality. All constant values are taken
 // from RFC, and could be adjusted based on specific use case.
