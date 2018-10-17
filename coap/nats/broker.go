@@ -17,9 +17,9 @@ import (
 	broker "github.com/nats-io/go-nats"
 )
 
-var _ mainflux.MessagePublisher = (*natsPublisher)(nil)
-
 const prefix = "channel"
+
+var _ mainflux.MessagePublisher = (*natsPublisher)(nil)
 
 type natsPublisher struct {
 	nc     *broker.Conn

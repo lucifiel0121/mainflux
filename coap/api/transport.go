@@ -28,27 +28,23 @@ import (
 	"github.com/mainflux/mainflux"
 )
 
+const (
+	maxPktLen = 1500
+	network   = "udp"
+	protocol  = "coap"
+	// Approximately number of supported requests per second
+	timestamp = int64(time.Millisecond) * 31
+)
+
 var (
 	errBadRequest = errors.New("bad request")
 	errBadOption  = errors.New("bad option")
 	auth          mainflux.ThingsServiceClient
 )
 
-const (
-	maxPktLen = 1500
-	network   = "udp"
-	protocol  = "coap"
-)
-
-const (
-	// Approximately number of supported requests per second
-	timestamp = int64(time.Millisecond) * 31
-)
-
 type handler func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message
 
-// NotFoundHandler handles erroneously formed requests.
-func NotFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.Message {
+func notFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.Message {
 	if m.IsConfirmable() {
 		return &gocoap.Message{
 			Type: gocoap.Acknowledgement,
@@ -70,7 +66,7 @@ func makeHandler(port string, svc coap.Service) gocoap.Handler {
 	r := mux.NewRouter()
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
-	r.NotFoundHandler = gocoap.FuncHandler(NotFoundHandler)
+	r.NotFoundHandler = gocoap.FuncHandler(notFoundHandler)
 	return r
 }
 
