@@ -129,7 +129,7 @@ func serve(svc coap.Service, conn *net.UDPConn, data []byte, addr *net.UDPAddr, 
 
 // ListenAndServe binds to the given address and serve requests forever.
 func ListenAndServe(svc coap.Service, tsc mainflux.ThingsServiceClient, addr string) error {
-	handler := makeHandler(addr, svc)
+	handler := MakeCOAPHandler(svc, nil)
 	auth = tsc
 	uaddr, err := net.ResolveUDPAddr(network, addr)
 	if err != nil {

@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	gocoap "github.com/dustin/go-coap"
 	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/coap"
@@ -72,7 +73,7 @@ func main() {
 	cc := thingsapi.NewClient(conn)
 
 	pubsub := nats.New(nc, logger)
-	svc := coap.New(pubsub)
+	svc := coap.New(pubsub, cc)
 	svc = api.LoggingMiddleware(svc, logger)
 
 	svc = api.MetricsMiddleware(
@@ -94,12 +95,7 @@ func main() {
 	errs := make(chan error, 2)
 
 	go startHTTPServer(cfg.Port, logger, errs)
-
-	go func() {
-		p := fmt.Sprintf(":%s", cfg.Port)
-		logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %s", cfg.Port))
-		errs <- api.ListenAndServe(svc, cc, p)
-	}()
+	go startCOAPServer(cfg.Port, svc, cc, logger, errs)
 
 	go func() {
 		c := make(chan os.Signal)
@@ -124,4 +120,10 @@ func startHTTPServer(port string, logger logger.Logger, errs chan error) {
 	p := fmt.Sprintf(":%s", port)
 	logger.Info(fmt.Sprintf("Things service started, exposed port %s", port))
 	errs <- http.ListenAndServe(p, api.MakeHTTPHandler())
+}
+
+func startCOAPServer(port string, svc coap.Service, auth mainflux.ThingsServiceClient, logger logger.Logger, errs chan error) {
+	p := fmt.Sprintf(":%s", port)
+	logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %s", port))
+	errs <- gocoap.ListenAndServe("udp", p, api.MakeCOAPHandler(svc, auth))
 }

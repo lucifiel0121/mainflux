@@ -61,7 +61,9 @@ func MakeHTTPHandler() http.Handler {
 	return b
 }
 
-func makeHandler(port string, svc coap.Service) gocoap.Handler {
+// MakeCOAPHandler creates handler for CoAP messages.
+func MakeCOAPHandler(svc coap.Service, tc mainflux.ThingsServiceClient) gocoap.Handler {
+	auth = tc
 	r := mux.NewRouter()
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
@@ -71,32 +73,39 @@ func makeHandler(port string, svc coap.Service) gocoap.Handler {
 
 func receive(svc coap.Service) handler {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
-		var res *gocoap.Message
-		if msg.IsConfirmable() {
-			res = &gocoap.Message{
-				Type:      gocoap.Acknowledgement,
-				Code:      gocoap.Content,
-				MessageID: msg.MessageID,
-				Token:     msg.Token,
-				Payload:   []byte{},
-			}
-			res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
+		// By default message is NonConfirmable, so
+		// NonConfirmable response is sent back.
+		var res = &gocoap.Message{
+			Type: gocoap.NonConfirmable,
+			// According to https://tools.ietf.org/html/rfc7252#page-47: If the POST
+			// succeeds but does not result in a new resource being created on the
+			// server, the response SHOULD have a 2.04 (Changed) Response Code.
+			Code:      gocoap.Changed,
+			MessageID: msg.MessageID,
+			Token:     msg.Token,
+			Payload:   []byte{},
 		}
 
-		if len(msg.Payload) == 0 && msg.IsConfirmable() {
-			res.Code = gocoap.BadRequest
-			return res
+		if msg.IsConfirmable() {
+			res.Type = gocoap.Acknowledgement
+			res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
+			if len(msg.Payload) == 0 {
+				res.Code = gocoap.BadRequest
+				return res
+			}
 		}
 
 		channelID := mux.Var(msg, "id")
 
 		cid, err := strconv.ParseUint(channelID, 10, 64)
 		if err != nil {
+			res.Code = gocoap.NotFound
 			return res
 		}
 
 		publisher, err := authorize(msg, res, cid)
 		if err != nil {
+			res.Code = gocoap.Forbidden
 			return res
 		}
 
@@ -110,6 +119,7 @@ func receive(svc coap.Service) handler {
 		if err := svc.Publish(rawMsg); err != nil {
 			res.Code = gocoap.InternalServerError
 		}
+
 		return res
 	}
 }
