@@ -11,22 +11,16 @@
 package coap
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"math"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
-	mux "github.com/dereulenspiegel/coap-mux"
 	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/coap/nats"
 	broker "github.com/nats-io/go-nats"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -40,6 +34,9 @@ const (
 
 	chanID    = "id"
 	keyHeader = "key"
+
+	// Approximately number of supported requests per second
+	timestamp = int64(time.Millisecond) * 31
 )
 
 var (
@@ -62,89 +59,56 @@ type Service interface {
 
 	// Subscribes to channel with specified id and adds subscription to
 	// service map of subscriptions under given ID.
-	Subscribe(uint64, string, nats.Channel) error
+	Subscribe(uint64, string, *net.UDPAddr, *gocoap.Message) error
 
 	// Unsubscribe method is used to stop observing resource.
 	Unsubscribe(string)
 
-	// SetTimeout sets timeout to wait CONF messages.
-	SetTimeout(string, *time.Timer, int) (chan bool, error)
-
-	// RemoveTimeout removes timeout when ACK message is received from client
-	// if timeout existed.
-	RemoveTimeout(string)
+	// Handle method handles ACK messages received from pinging
+	// client.
+	Handle(clientID string)
 }
 
 var _ Service = (*adapterService)(nil)
 
 type adapterService struct {
 	pubsub nats.Service
-	subs   map[string]nats.Channel
+	subs   map[string]*Handler
 	mu     sync.Mutex
-	auth   mainflux.ThingsServiceClient
+	conn   *net.UDPConn
 }
 
 // New instantiates the CoAP adapter implementation.
-func New(pubsub nats.Service, auth mainflux.ThingsServiceClient) Service {
+func New(pubsub nats.Service, conn *net.UDPConn) Service {
 	return &adapterService{
 		pubsub: pubsub,
-		subs:   make(map[string]nats.Channel),
+		subs:   make(map[string]*Handler),
 		mu:     sync.Mutex{},
+		conn:   conn,
 	}
 }
 
-func (svc *adapterService) get(clientID string) (nats.Channel, bool) {
+func (svc *adapterService) get(clientID string) (*Handler, bool) {
 	svc.mu.Lock()
+	defer svc.mu.Unlock()
 	obs, ok := svc.subs[clientID]
-	svc.mu.Unlock()
 	return obs, ok
 }
 
-func (svc *adapterService) put(clientID string, obs nats.Channel) {
+func (svc *adapterService) put(clientID string, handler *Handler) {
 	svc.mu.Lock()
-	svc.subs[clientID] = obs
-	svc.mu.Unlock()
+	defer svc.mu.Unlock()
+	svc.subs[clientID] = handler
 }
 
 func (svc *adapterService) remove(clientID string) {
 	svc.mu.Lock()
-	obs, ok := svc.subs[clientID]
+	defer svc.mu.Unlock()
+	h, ok := svc.subs[clientID]
 	if ok {
-		obs.Closed <- true
 		delete(svc.subs, clientID)
+		h.Cancel <- false
 	}
-	svc.mu.Unlock()
-}
-
-func (svc *adapterService) authorize(msg *gocoap.Message, res *gocoap.Message, cid uint64) (uint64, error) {
-	// Device Key is passed as Uri-Query parameter, which option ID is 15 (0xf).
-	key, err := authKey(msg.Option(gocoap.URIQuery))
-	if err != nil {
-		if err == errBadOption {
-			res.Code = gocoap.BadOption
-		}
-		return 0, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	id, err := svc.auth.CanAccess(ctx, &mainflux.AccessReq{Token: key, ChanID: cid})
-
-	if err != nil {
-		e, ok := status.FromError(err)
-		if ok {
-			switch e.Code() {
-			case codes.PermissionDenied:
-				res.Code = gocoap.Forbidden
-			default:
-				res.Code = gocoap.ServiceUnavailable
-			}
-			return 0, err
-		}
-		res.Code = gocoap.InternalServerError
-	}
-	return id.GetValue(), nil
 }
 
 func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
@@ -159,13 +123,25 @@ func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 	return nil
 }
 
-func (svc *adapterService) Subscribe(chanID uint64, clientID string, ch nats.Channel) error {
+func (svc *adapterService) Subscribe(chanID uint64, clientID string, clientAddr *net.UDPAddr, msg *gocoap.Message) error {
 	// Remove entry if already exists.
 	svc.remove(clientID)
-	if err := svc.pubsub.Subscribe(chanID, ch); err != nil {
+	handler := Handler{
+		Messages: make(chan mainflux.RawMessage),
+		// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
+		// 24 hours. Since 24 hours is too long for our purposes, we use 12.
+		Ticker: time.NewTicker(12 * time.Second),
+		Cancel: make(chan bool),
+	}
+
+	go handler.cancel()
+	go handler.ping(svc, clientID, svc.conn, clientAddr, msg)
+	go handler.handleMessage(svc.conn, clientAddr, msg)
+
+	if err := svc.pubsub.Subscribe(chanID, handler.Messages, handler.Cancel); err != nil {
 		return ErrFailedSubscription
 	}
-	svc.put(clientID, ch)
+	svc.put(clientID, &handler)
 	return nil
 }
 
@@ -173,83 +149,12 @@ func (svc *adapterService) Unsubscribe(clientID string) {
 	svc.remove(clientID)
 }
 
-func (svc *adapterService) SetTimeout(clientID string, timer *time.Timer, duration int) (chan bool, error) {
-	sub, ok := svc.get(clientID)
-	if !ok {
-		return nil, errors.New("observer entry not found")
+func (svc *adapterService) Handle(clientID string) {
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	println("handle")
+	h, ok := svc.subs[clientID]
+	if ok {
+		h.StoreExpired(false)
 	}
-	go func() {
-		for {
-			select {
-			case _, ok := <-sub.Timer:
-				timer.Stop()
-				if ok {
-					sub.Notify <- false
-				}
-				return
-			case <-timer.C:
-				duration *= 2
-				if duration >= maxTimeout {
-					timer.Stop()
-					sub.Notify <- false
-					svc.Unsubscribe(clientID)
-					return
-				}
-				timer.Reset(time.Duration(duration))
-				sub.Notify <- true
-			}
-		}
-	}()
-	return sub.Notify, nil
-}
-
-func (svc *adapterService) RemoveTimeout(clientID string) {
-	if sub, ok := svc.get(clientID); ok {
-		sub.Timer <- false
-	}
-}
-
-func (svc *adapterService) Handle(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
-	res := &gocoap.Message{
-		Type:      gocoap.NonConfirmable,
-		Code:      gocoap.Content,
-		MessageID: msg.MessageID,
-		Token:     msg.Token,
-		Payload:   []byte{},
-	}
-
-	switch msg.Type {
-	case gocoap.Reset:
-		if len(msg.Payload) != 0 {
-			res.Code = gocoap.BadRequest
-			break
-		}
-		channelID := mux.Var(msg, chanID)
-		cid, err := strconv.ParseUint(channelID, 10, 64)
-		if err != nil {
-			break
-		}
-		res.Type = gocoap.Acknowledgement
-		publisher, err := svc.authorize(msg, res, cid)
-		if err != nil {
-			break
-		}
-		id := fmt.Sprintf("%d-%x", publisher, msg.Token)
-		svc.RemoveTimeout(id)
-		svc.Unsubscribe(id)
-	case gocoap.Acknowledgement:
-		channelID := mux.Var(msg, chanID)
-		cid, err := strconv.ParseUint(channelID, 10, 64)
-		if err != nil {
-			break
-		}
-		res.Type = gocoap.Acknowledgement
-		publisher, err := svc.authorize(msg, res, cid)
-		if err != nil {
-			break
-		}
-		id := fmt.Sprintf("%d-%x", publisher, msg.Token)
-		svc.RemoveTimeout(id)
-	}
-	return res
 }

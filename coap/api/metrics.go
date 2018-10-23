@@ -10,12 +10,13 @@
 package api
 
 import (
+	"net"
 	"time"
 
+	gocoap "github.com/dustin/go-coap"
 	"github.com/go-kit/kit/metrics"
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/coap"
-	"github.com/mainflux/mainflux/coap/nats"
 )
 
 var _ coap.Service = (*metricsMiddleware)(nil)
@@ -44,18 +45,26 @@ func (mm *metricsMiddleware) Publish(msg mainflux.RawMessage) error {
 	return mm.svc.Publish(msg)
 }
 
-func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, channel nats.Channel) error {
-	return mm.svc.Subscribe(chanID, clientID, channel)
-}
-
-func (mm *metricsMiddleware) SetTimeout(clientID string, timer *time.Timer, duration int) (chan bool, error) {
-	return mm.svc.SetTimeout(clientID, timer, duration)
-}
-
-func (mm *metricsMiddleware) RemoveTimeout(clientID string) {
-	mm.svc.RemoveTimeout(clientID)
+func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, clientAddr *net.UDPAddr, msg *gocoap.Message) error {
+	defer func(begin time.Time) {
+		mm.counter.With("method", "subscribe").Add(1)
+		mm.latency.With("method", "subscribe").Observe(time.Since(begin).Seconds())
+	}(time.Now())
+	return mm.svc.Subscribe(chanID, clientID, clientAddr, msg)
 }
 
 func (mm *metricsMiddleware) Unsubscribe(clientID string) {
+	defer func(begin time.Time) {
+		mm.counter.With("method", "unsubscribe").Add(1)
+		mm.latency.With("method", "unsubscribe").Observe(time.Since(begin).Seconds())
+	}(time.Now())
 	mm.svc.Unsubscribe(clientID)
+}
+
+func (mm *metricsMiddleware) Handle(clientID string) {
+	defer func(begin time.Time) {
+		mm.counter.With("method", "handle").Add(1)
+		mm.latency.With("method", "handle").Observe(time.Since(begin).Seconds())
+	}(time.Now())
+	mm.svc.Handle(clientID)
 }

@@ -8,8 +8,7 @@
 package api
 
 import (
-	"bytes"
-	"encoding/binary"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -19,9 +18,8 @@ import (
 
 	"github.com/go-zoo/bone"
 	"github.com/mainflux/mainflux/coap"
-	"github.com/mainflux/mainflux/coap/nats"
-
-	"math/rand"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	mux "github.com/dereulenspiegel/coap-mux"
 	gocoap "github.com/dustin/go-coap"
@@ -66,9 +64,44 @@ func MakeCOAPHandler(svc coap.Service, tc mainflux.ThingsServiceClient) gocoap.H
 	auth = tc
 	r := mux.NewRouter()
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
-	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))).Methods(gocoap.GET)
+	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))) //.Methods(gocoap.GET)
 	r.NotFoundHandler = gocoap.FuncHandler(notFoundHandler)
+
 	return r
+}
+
+func authorize(msg *gocoap.Message, res *gocoap.Message, cid uint64) (uint64, error) {
+	// Device Key is passed as Uri-Query parameter, which option ID is 15 (0xf).
+	key, err := authKey(msg.Option(gocoap.URIQuery))
+	if err != nil {
+		switch err {
+		case errBadOption:
+			res.Code = gocoap.BadOption
+		case errBadRequest:
+			res.Code = gocoap.BadRequest
+		}
+		return 0, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	id, err := auth.CanAccess(ctx, &mainflux.AccessReq{Token: key, ChanID: cid})
+
+	if err != nil {
+		e, ok := status.FromError(err)
+		if ok {
+			switch e.Code() {
+			case codes.PermissionDenied:
+				res.Code = gocoap.Forbidden
+			default:
+				res.Code = gocoap.ServiceUnavailable
+			}
+			return 0, err
+		}
+		res.Code = gocoap.InternalServerError
+	}
+	return id.GetValue(), nil
 }
 
 func receive(svc coap.Service) handler {
@@ -127,122 +160,43 @@ func receive(svc coap.Service) handler {
 func observe(svc coap.Service) handler {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
 		var res *gocoap.Message
-		if msg.IsConfirmable() {
-			res = &gocoap.Message{
-				Type:      gocoap.Acknowledgement,
-				Code:      gocoap.Content,
-				MessageID: msg.MessageID,
-				Token:     msg.Token,
-				Payload:   []byte{},
-			}
-			res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
+		res = &gocoap.Message{
+			Type:      gocoap.Acknowledgement,
+			Code:      gocoap.Content,
+			MessageID: msg.MessageID,
+			Token:     msg.Token,
+			Payload:   []byte{},
 		}
+		res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 
 		channelID := mux.Var(msg, "id")
 		cid, err := strconv.ParseUint(channelID, 10, 64)
 		if err != nil {
+			res.Code = gocoap.NotFound
 			return res
 		}
 
 		publisher, err := authorize(msg, res, cid)
 		if err != nil {
+			res.Code = gocoap.Forbidden
 			return res
 		}
 
-		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 1 {
-			id := fmt.Sprintf("%d-%x", publisher, msg.Token)
+		id := fmt.Sprintf("%x-%d-%d", msg.Token, publisher, cid)
+
+		if msg.Type == gocoap.Acknowledgement {
+			svc.Handle(id)
+			return nil
+		}
+
+		if value, ok := msg.Option(gocoap.Observe).(uint32); (ok && value == 1) || msg.Type == gocoap.Reset {
 			svc.Unsubscribe(id)
 		}
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
-			ch := nats.Channel{
-				Messages: make(chan mainflux.RawMessage),
-				Closed:   make(chan bool),
-				Timer:    make(chan bool),
-				Notify:   make(chan bool),
-			}
-			id := fmt.Sprintf("%d-%x", publisher, msg.Token)
-			if err := svc.Subscribe(cid, id, ch); err != nil {
-				res.Code = gocoap.InternalServerError
-				return res
-			}
-			go handleSub(svc, id, conn, addr, msg, ch)
-			res.AddOption(gocoap.Observe, 0)
+			res.AddOption(gocoap.Observe, 1)
+			svc.Subscribe(cid, id, addr, msg)
 		}
 		return res
-	}
-}
-
-func sendMessage(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) error {
-	buff := new(bytes.Buffer)
-	now := time.Now().UnixNano() / timestamp
-	if err := binary.Write(buff, binary.BigEndian, now); err != nil {
-		return err
-	}
-	observeVal := buff.Bytes()
-	msg.SetOption(gocoap.Observe, observeVal[len(observeVal)-3:])
-	if msg.IsConfirmable() {
-		timer := time.NewTimer(time.Duration(coap.AckTimeout))
-		ch, err := svc.SetTimeout(id, timer, coap.AckTimeout)
-		if err != nil {
-			return err
-		}
-		go sendConfirmable(conn, addr, msg, ch)
-		return nil
-	}
-	return gocoap.Transmit(conn, addr, *msg)
-}
-
-func sendConfirmable(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch chan bool) {
-	msg.SetOption(gocoap.MaxRetransmit, coap.MaxRetransmit)
-	// Try to transmit MAX_RETRANSMITION times; every attempt duplicates timeout between transmission.
-	for i := 0; i < coap.MaxRetransmit; i++ {
-		if err := gocoap.Transmit(conn, addr, *msg); err != nil {
-			return
-		}
-		state, ok := <-ch
-		if !state || !ok {
-			return
-		}
-	}
-	return
-}
-
-func handleSub(svc coap.Service, id string, conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message, ch nats.Channel) {
-	// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
-	// 24 hours. Since 24 hours is too long for our purposes, we use 12.
-	ticker := time.NewTicker(12 * time.Hour)
-	res := &gocoap.Message{
-		Type:      gocoap.NonConfirmable,
-		Code:      gocoap.Content,
-		MessageID: msg.MessageID,
-		Token:     msg.Token,
-		Payload:   []byte{},
-	}
-	res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
-	res.SetOption(gocoap.LocationPath, msg.Path())
-
-	for {
-		select {
-		case <-ticker.C:
-			ticker.Stop()
-			res.Type = gocoap.Confirmable
-			rand.Seed(time.Now().UnixNano())
-			if err := sendMessage(svc, id, conn, addr, res); err != nil {
-				ticker.Stop()
-				return
-			}
-		case rawMsg, ok := <-ch.Messages:
-			if !ok {
-				ticker.Stop()
-				return
-			}
-			res.Type = gocoap.NonConfirmable
-			res.Payload = rawMsg.Payload
-			if err := sendMessage(svc, id, conn, addr, res); err != nil {
-				ticker.Stop()
-				return
-			}
-		}
 	}
 }

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-// Package nats contains NATS-specific message repository implementation.
+// Package nats contains NATS message publisher implementation.
 package nats
 
 import (
@@ -13,7 +13,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mainflux/mainflux"
-	log "github.com/mainflux/mainflux/logger"
 	broker "github.com/nats-io/go-nats"
 )
 
@@ -21,14 +20,19 @@ const prefix = "channel"
 
 var _ mainflux.MessagePublisher = (*natsPublisher)(nil)
 
-type natsPublisher struct {
-	nc     *broker.Conn
-	logger log.Logger
+// Service specifies NATS service API.
+type Service interface {
+	mainflux.MessagePublisher
+	Subscribe(uint64, chan<- mainflux.RawMessage, chan bool) error
 }
 
-// New instantiates NATS message pubsub.
-func New(nc *broker.Conn, l log.Logger) Service {
-	return &natsPublisher{nc, l}
+type natsPublisher struct {
+	nc *broker.Conn
+}
+
+// New instantiates NATS message publisher.
+func New(nc *broker.Conn) Service {
+	return &natsPublisher{nc}
 }
 
 func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
@@ -36,26 +40,29 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	return pubsub.nc.Publish(fmt.Sprintf("%s.%d", prefix, msg.Channel), data)
+
+	subject := fmt.Sprintf("%s.%d", prefix, msg.Channel)
+	return pubsub.nc.Publish(subject, data)
 }
 
-func (pubsub *natsPublisher) Subscribe(chanID uint64, channel Channel) error {
+func (pubsub *natsPublisher) Subscribe(chanID uint64, messages chan<- mainflux.RawMessage, cancel chan bool) error {
 	sub, err := pubsub.nc.Subscribe(fmt.Sprintf("%s.%d", prefix, chanID), func(msg *broker.Msg) {
 		if msg == nil {
 			return
 		}
-
 		var rawMsg mainflux.RawMessage
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
 			return
 		}
-		channel.Messages <- rawMsg
+		messages <- rawMsg
 	})
+	if err != nil {
+		return err
+	}
 
 	go func() {
-		<-channel.Closed
+		<-cancel
 		sub.Unsubscribe()
-		channel.Close()
 	}()
 	return err
 }
