@@ -10,7 +10,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -72,24 +71,9 @@ func main() {
 	defer conn.Close()
 
 	cc := thingsapi.NewClient(conn)
-
-	port := fmt.Sprintf(":%s", cfg.Port)
-
-	uaddr, err := net.ResolveUDPAddr("udp", port)
-	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to resolve UDP address: %s", err))
-		os.Exit(1)
-	}
-	defer conn.Close()
-
-	udpConn, err := net.ListenUDP("udp", uaddr)
-	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to listen UDP: %s", err))
-		os.Exit(1)
-	}
-
+	respChan := make(chan string)
 	pubsub := nats.New(nc)
-	svc := coap.New(pubsub, udpConn)
+	svc := coap.New(pubsub, respChan)
 	svc = api.LoggingMiddleware(svc, logger)
 
 	svc = api.MetricsMiddleware(
@@ -111,7 +95,7 @@ func main() {
 	errs := make(chan error, 2)
 
 	go startHTTPServer(cfg.Port, logger, errs)
-	go startCOAPServer(cfg.Port, udpConn, svc, cc, logger, errs)
+	go startCOAPServer(cfg.Port, svc, cc, respChan, logger, errs)
 
 	go func() {
 		c := make(chan os.Signal)
@@ -138,7 +122,8 @@ func startHTTPServer(port string, logger logger.Logger, errs chan error) {
 	errs <- http.ListenAndServe(p, api.MakeHTTPHandler())
 }
 
-func startCOAPServer(port string, conn *net.UDPConn, svc coap.Service, auth mainflux.ThingsServiceClient, logger logger.Logger, errs chan error) {
+func startCOAPServer(port string, svc coap.Service, auth mainflux.ThingsServiceClient, respChan chan<- string, logger logger.Logger, errs chan error) {
+	p := fmt.Sprintf(":%s", port)
 	logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %s", port))
-	errs <- gocoap.Serve(conn, api.MakeCOAPHandler(svc, auth))
+	errs <- gocoap.ListenAndServe("udp", p, api.MakeCOAPHandler(svc, auth, respChan))
 }

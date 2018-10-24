@@ -45,12 +45,12 @@ func (mm *metricsMiddleware) Publish(msg mainflux.RawMessage) error {
 	return mm.svc.Publish(msg)
 }
 
-func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, clientAddr *net.UDPAddr, msg *gocoap.Message) error {
+func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, conn *net.UDPConn, clientAddr *net.UDPAddr, msg *gocoap.Message) error {
 	defer func(begin time.Time) {
 		mm.counter.With("method", "subscribe").Add(1)
 		mm.latency.With("method", "subscribe").Observe(time.Since(begin).Seconds())
 	}(time.Now())
-	return mm.svc.Subscribe(chanID, clientID, clientAddr, msg)
+	return mm.svc.Subscribe(chanID, clientID, conn, clientAddr, msg)
 }
 
 func (mm *metricsMiddleware) Unsubscribe(clientID string) {
@@ -59,12 +59,4 @@ func (mm *metricsMiddleware) Unsubscribe(clientID string) {
 		mm.latency.With("method", "unsubscribe").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 	mm.svc.Unsubscribe(clientID)
-}
-
-func (mm *metricsMiddleware) Handle(clientID string) {
-	defer func(begin time.Time) {
-		mm.counter.With("method", "handle").Add(1)
-		mm.latency.With("method", "handle").Observe(time.Since(begin).Seconds())
-	}(time.Now())
-	mm.svc.Handle(clientID)
 }

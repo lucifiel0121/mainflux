@@ -60,11 +60,11 @@ func MakeHTTPHandler() http.Handler {
 }
 
 // MakeCOAPHandler creates handler for CoAP messages.
-func MakeCOAPHandler(svc coap.Service, tc mainflux.ThingsServiceClient) gocoap.Handler {
+func MakeCOAPHandler(svc coap.Service, tc mainflux.ThingsServiceClient, responses chan<- string) gocoap.Handler {
 	auth = tc
 	r := mux.NewRouter()
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
-	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc))) //.Methods(gocoap.GET)
+	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc, responses)))
 	r.NotFoundHandler = gocoap.FuncHandler(notFoundHandler)
 
 	return r
@@ -157,7 +157,7 @@ func receive(svc coap.Service) handler {
 	}
 }
 
-func observe(svc coap.Service) handler {
+func observe(svc coap.Service, responses chan<- string) handler {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
 		var res *gocoap.Message
 		res = &gocoap.Message{
@@ -185,7 +185,7 @@ func observe(svc coap.Service) handler {
 		id := fmt.Sprintf("%x-%d-%d", msg.Token, publisher, cid)
 
 		if msg.Type == gocoap.Acknowledgement {
-			svc.Handle(id)
+			responses <- id
 			return nil
 		}
 
@@ -195,7 +195,7 @@ func observe(svc coap.Service) handler {
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
 			res.AddOption(gocoap.Observe, 1)
-			svc.Subscribe(cid, id, addr, msg)
+			svc.Subscribe(cid, id, conn, addr, msg)
 		}
 		return res
 	}

@@ -45,7 +45,7 @@ func (lm *loggingMiddleware) Publish(msg mainflux.RawMessage) (err error) {
 	return lm.svc.Publish(msg)
 }
 
-func (lm *loggingMiddleware) Subscribe(chanID uint64, clientID string, clientAddr *net.UDPAddr, msg *gocoap.Message) (err error) {
+func (lm *loggingMiddleware) Subscribe(chanID uint64, clientID string, conn *net.UDPConn, clientAddr *net.UDPAddr, msg *gocoap.Message) (err error) {
 	defer func(begin time.Time) {
 		message := fmt.Sprintf("Method subscribe to channel %d for client %s took %s to complete", chanID, clientID, time.Since(begin))
 		if err != nil {
@@ -55,7 +55,7 @@ func (lm *loggingMiddleware) Subscribe(chanID uint64, clientID string, clientAdd
 		lm.logger.Info(fmt.Sprintf("%s without errors.", message))
 	}(time.Now())
 
-	return lm.svc.Subscribe(chanID, clientID, clientAddr, msg)
+	return lm.svc.Subscribe(chanID, clientID, conn, clientAddr, msg)
 }
 
 func (lm *loggingMiddleware) Unsubscribe(clientID string) {
@@ -64,14 +64,6 @@ func (lm *loggingMiddleware) Unsubscribe(clientID string) {
 		lm.logger.Info(fmt.Sprintf("%s without errors.", message))
 	}(time.Now())
 
+	println("called")
 	lm.svc.Unsubscribe(clientID)
-}
-
-func (lm *loggingMiddleware) Handle(clientID string) {
-	defer func(begin time.Time) {
-		message := fmt.Sprintf("Method handle for the client %s took %s to complete", clientID, time.Since(begin))
-		lm.logger.Info(fmt.Sprintf("%s without errors.", message))
-	}(time.Now())
-
-	lm.svc.Handle(clientID)
 }

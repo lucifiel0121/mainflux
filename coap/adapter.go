@@ -24,19 +24,8 @@ import (
 )
 
 const (
-	responseBackoffMultiplier = 1.5
-
-	// AckTimeout is the amount of time to wait for a response.
-	AckTimeout = int(2 * time.Second)
-
-	// MaxRetransmit is the maximum number of times a message will be retransmitted.
-	MaxRetransmit = 4
-
 	chanID    = "id"
 	keyHeader = "key"
-
-	// Approximately number of supported requests per second
-	timestamp = int64(time.Millisecond) * 31
 )
 
 var (
@@ -50,7 +39,7 @@ var (
 	// ErrFailedConnection indicates that service couldn't connect to message broker.
 	ErrFailedConnection = errors.New("failed to connect to message broker")
 
-	maxTimeout = int(float64(AckTimeout) * ((math.Pow(2, float64(MaxRetransmit))) - 1) * responseBackoffMultiplier)
+	maxTimeout = int(float64(ackTimeout) * ((math.Pow(2, float64(maxRetransmit))) - 1) * ackRandomFactor)
 )
 
 // Service specifies coap service API.
@@ -59,14 +48,10 @@ type Service interface {
 
 	// Subscribes to channel with specified id and adds subscription to
 	// service map of subscriptions under given ID.
-	Subscribe(uint64, string, *net.UDPAddr, *gocoap.Message) error
+	Subscribe(uint64, string, *net.UDPConn, *net.UDPAddr, *gocoap.Message) error
 
 	// Unsubscribe method is used to stop observing resource.
 	Unsubscribe(string)
-
-	// Handle method handles ACK messages received from pinging
-	// client.
-	Handle(clientID string)
 }
 
 var _ Service = (*adapterService)(nil)
@@ -75,17 +60,17 @@ type adapterService struct {
 	pubsub nats.Service
 	subs   map[string]*Handler
 	mu     sync.Mutex
-	conn   *net.UDPConn
 }
 
 // New instantiates the CoAP adapter implementation.
-func New(pubsub nats.Service, conn *net.UDPConn) Service {
-	return &adapterService{
+func New(pubsub nats.Service, responses <-chan string) Service {
+	as := &adapterService{
 		pubsub: pubsub,
 		subs:   make(map[string]*Handler),
 		mu:     sync.Mutex{},
-		conn:   conn,
 	}
+	go as.listenResponses(responses)
+	return as
 }
 
 func (svc *adapterService) get(clientID string) (*Handler, bool) {
@@ -111,6 +96,18 @@ func (svc *adapterService) remove(clientID string) {
 	}
 }
 
+// ListenResponses method handles ACK messages received from client.
+func (svc *adapterService) listenResponses(responses <-chan string) {
+	for {
+		id := <-responses
+		println("ping response...")
+		h, ok := svc.get(id)
+		if ok {
+			h.StoreExpired(false)
+		}
+	}
+}
+
 func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 	if err := svc.pubsub.Publish(msg); err != nil {
 		switch err {
@@ -123,20 +120,22 @@ func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 	return nil
 }
 
-func (svc *adapterService) Subscribe(chanID uint64, clientID string, clientAddr *net.UDPAddr, msg *gocoap.Message) error {
+func (svc *adapterService) Subscribe(chanID uint64, clientID string, conn *net.UDPConn, clientAddr *net.UDPAddr, msg *gocoap.Message) error {
 	// Remove entry if already exists.
 	svc.remove(clientID)
 	handler := Handler{
 		Messages: make(chan mainflux.RawMessage),
 		// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
 		// 24 hours. Since 24 hours is too long for our purposes, we use 12.
-		Ticker: time.NewTicker(12 * time.Second),
+		Ticker: time.NewTicker(12 * time.Hour),
 		Cancel: make(chan bool),
+		conn:   conn,
+		addr:   clientAddr,
 	}
 
 	go handler.cancel()
-	go handler.ping(svc, clientID, svc.conn, clientAddr, msg)
-	go handler.handleMessage(svc.conn, clientAddr, msg)
+	go handler.ping(svc, clientID, msg)
+	go handler.handleMessage(msg)
 
 	if err := svc.pubsub.Subscribe(chanID, handler.Messages, handler.Cancel); err != nil {
 		return ErrFailedSubscription
@@ -147,14 +146,4 @@ func (svc *adapterService) Subscribe(chanID uint64, clientID string, clientAddr 
 
 func (svc *adapterService) Unsubscribe(clientID string) {
 	svc.remove(clientID)
-}
-
-func (svc *adapterService) Handle(clientID string) {
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
-	println("handle")
-	h, ok := svc.subs[clientID]
-	if ok {
-		h.StoreExpired(false)
-	}
 }
