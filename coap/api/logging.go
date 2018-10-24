@@ -11,10 +11,8 @@ package api
 
 import (
 	"fmt"
-	"net"
 	"time"
 
-	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/coap"
 	log "github.com/mainflux/mainflux/logger"
@@ -45,7 +43,7 @@ func (lm *loggingMiddleware) Publish(msg mainflux.RawMessage) (err error) {
 	return lm.svc.Publish(msg)
 }
 
-func (lm *loggingMiddleware) Subscribe(chanID uint64, clientID string, conn *net.UDPConn, clientAddr *net.UDPAddr, msg *gocoap.Message) (err error) {
+func (lm *loggingMiddleware) Subscribe(chanID uint64, clientID string, handler *coap.Handler) (err error) {
 	defer func(begin time.Time) {
 		message := fmt.Sprintf("Method subscribe to channel %d for client %s took %s to complete", chanID, clientID, time.Since(begin))
 		if err != nil {
@@ -55,15 +53,14 @@ func (lm *loggingMiddleware) Subscribe(chanID uint64, clientID string, conn *net
 		lm.logger.Info(fmt.Sprintf("%s without errors.", message))
 	}(time.Now())
 
-	return lm.svc.Subscribe(chanID, clientID, conn, clientAddr, msg)
+	return lm.svc.Subscribe(chanID, clientID, handler)
 }
 
 func (lm *loggingMiddleware) Unsubscribe(clientID string) {
 	defer func(begin time.Time) {
-		message := fmt.Sprintf("Method unsubscribe for the client %s took %s to complete", clientID, time.Since(begin))
-		lm.logger.Info(fmt.Sprintf("%s without errors.", message))
+		message := fmt.Sprintf("Method unsubscribe for the client %s took %s to complete without errors.", clientID, time.Since(begin))
+		lm.logger.Info(fmt.Sprintf(message))
 	}(time.Now())
 
-	println("called")
 	lm.svc.Unsubscribe(clientID)
 }

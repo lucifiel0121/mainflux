@@ -1,11 +1,22 @@
-package coap
+//
+// Copyright (c) 2018
+// Mainflux
+//
+// SPDX-License-Identifier: Apache-2.0
+//
 
-import "strings"
+package api
+
+import (
+	"strings"
+)
+
+const keyHeader = "key"
 
 func authKey(opt interface{}) (string, error) {
 	val, ok := opt.(string)
 	if !ok {
-		return "", errBadOption
+		return "", errBadRequest
 	}
 	arr := strings.Split(val, "=")
 	if len(arr) != 2 || strings.ToLower(arr[0]) != keyHeader {

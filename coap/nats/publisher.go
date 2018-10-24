@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-// Package nats contains NATS message publisher implementation.
+// Package ats contains NATS message publisher implementation.
 package nats
 
 import (
@@ -13,6 +13,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/mainflux/mainflux"
+	"github.com/mainflux/mainflux/coap"
 	broker "github.com/nats-io/go-nats"
 )
 
@@ -20,18 +21,12 @@ const prefix = "channel"
 
 var _ mainflux.MessagePublisher = (*natsPublisher)(nil)
 
-// Service specifies NATS service API.
-type Service interface {
-	mainflux.MessagePublisher
-	Subscribe(uint64, chan<- mainflux.RawMessage, chan bool) error
-}
-
 type natsPublisher struct {
 	nc *broker.Conn
 }
 
 // New instantiates NATS message publisher.
-func New(nc *broker.Conn) Service {
+func New(nc *broker.Conn) coap.Broker {
 	return &natsPublisher{nc}
 }
 
@@ -45,7 +40,7 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	return pubsub.nc.Publish(subject, data)
 }
 
-func (pubsub *natsPublisher) Subscribe(chanID uint64, messages chan<- mainflux.RawMessage, cancel chan bool) error {
+func (pubsub *natsPublisher) Subscribe(chanID uint64, clientID string, handler *coap.Handler) error {
 	sub, err := pubsub.nc.Subscribe(fmt.Sprintf("%s.%d", prefix, chanID), func(msg *broker.Msg) {
 		if msg == nil {
 			return
@@ -54,15 +49,16 @@ func (pubsub *natsPublisher) Subscribe(chanID uint64, messages chan<- mainflux.R
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
 			return
 		}
-		messages <- rawMsg
+		handler.Messages <- rawMsg
 	})
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		<-cancel
+		<-handler.Cancel
 		sub.Unsubscribe()
 	}()
-	return err
+
+	return nil
 }

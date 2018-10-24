@@ -10,10 +10,8 @@
 package api
 
 import (
-	"net"
 	"time"
 
-	gocoap "github.com/dustin/go-coap"
 	"github.com/go-kit/kit/metrics"
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/coap"
@@ -45,12 +43,12 @@ func (mm *metricsMiddleware) Publish(msg mainflux.RawMessage) error {
 	return mm.svc.Publish(msg)
 }
 
-func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, conn *net.UDPConn, clientAddr *net.UDPAddr, msg *gocoap.Message) error {
+func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, handler *coap.Handler) error {
 	defer func(begin time.Time) {
 		mm.counter.With("method", "subscribe").Add(1)
 		mm.latency.With("method", "subscribe").Observe(time.Since(begin).Seconds())
 	}(time.Now())
-	return mm.svc.Subscribe(chanID, clientID, conn, clientAddr, msg)
+	return mm.svc.Subscribe(chanID, clientID, handler)
 }
 
 func (mm *metricsMiddleware) Unsubscribe(clientID string) {

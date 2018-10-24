@@ -71,7 +71,7 @@ func main() {
 	defer conn.Close()
 
 	cc := thingsapi.NewClient(conn)
-	respChan := make(chan string)
+	respChan := make(chan string, 10000)
 	pubsub := nats.New(nc)
 	svc := coap.New(pubsub, respChan)
 	svc = api.LoggingMiddleware(svc, logger)
@@ -122,8 +122,8 @@ func startHTTPServer(port string, logger logger.Logger, errs chan error) {
 	errs <- http.ListenAndServe(p, api.MakeHTTPHandler())
 }
 
-func startCOAPServer(port string, svc coap.Service, auth mainflux.ThingsServiceClient, respChan chan<- string, logger logger.Logger, errs chan error) {
+func startCOAPServer(port string, svc coap.Service, auth mainflux.ThingsServiceClient, respChan chan<- string, l logger.Logger, errs chan error) {
 	p := fmt.Sprintf(":%s", port)
-	logger.Info(fmt.Sprintf("CoAP adapter service started, exposed port %s", port))
-	errs <- gocoap.ListenAndServe("udp", p, api.MakeCOAPHandler(svc, auth, respChan))
+	l.Info(fmt.Sprintf("CoAP adapter service started, exposed port %s", port))
+	errs <- gocoap.ListenAndServe("udp", p, api.MakeCOAPHandler(svc, auth, l, respChan))
 }

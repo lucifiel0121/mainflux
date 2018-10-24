@@ -8,7 +8,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -18,6 +21,7 @@ import (
 
 	"github.com/go-zoo/bone"
 	"github.com/mainflux/mainflux/coap"
+	log "github.com/mainflux/mainflux/logger"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -30,6 +34,7 @@ const (
 	maxPktLen = 1500
 	network   = "udp"
 	protocol  = "coap"
+	chanID    = "id"
 	// Approximately number of supported requests per second
 	timestamp = int64(time.Millisecond) * 31
 )
@@ -38,6 +43,7 @@ var (
 	errBadRequest = errors.New("bad request")
 	errBadOption  = errors.New("bad option")
 	auth          mainflux.ThingsServiceClient
+	logger        log.Logger
 )
 
 type handler func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message
@@ -56,12 +62,15 @@ func notFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 func MakeHTTPHandler() http.Handler {
 	b := bone.New()
 	b.GetFunc("/version", mainflux.Version("CoAP"))
+
 	return b
 }
 
 // MakeCOAPHandler creates handler for CoAP messages.
-func MakeCOAPHandler(svc coap.Service, tc mainflux.ThingsServiceClient, responses chan<- string) gocoap.Handler {
+func MakeCOAPHandler(svc coap.Service, tc mainflux.ThingsServiceClient, l log.Logger, responses chan<- string) gocoap.Handler {
 	auth = tc
+	logger = l
+
 	r := mux.NewRouter()
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(receive(svc))).Methods(gocoap.POST)
 	r.Handle("/channels/{id}/messages", gocoap.FuncHandler(observe(svc, responses)))
@@ -80,6 +89,7 @@ func authorize(msg *gocoap.Message, res *gocoap.Message, cid uint64) (uint64, er
 		case errBadRequest:
 			res.Code = gocoap.BadRequest
 		}
+
 		return 0, err
 	}
 
@@ -179,6 +189,7 @@ func observe(svc coap.Service, responses chan<- string) handler {
 		publisher, err := authorize(msg, res, cid)
 		if err != nil {
 			res.Code = gocoap.Forbidden
+			logger.Warn(fmt.Sprintf("Failed to authorize: %s", err))
 			return res
 		}
 
@@ -195,8 +206,90 @@ func observe(svc coap.Service, responses chan<- string) handler {
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
 			res.AddOption(gocoap.Observe, 1)
-			svc.Subscribe(cid, id, conn, addr, msg)
+			handler := coap.NewHandler()
+			if err := svc.Subscribe(cid, id, handler); err != nil {
+				logger.Warn(fmt.Sprintf("Failed to subscribe to NATS subject: %s", err))
+				res.Code = gocoap.InternalServerError
+				return res
+			}
+
+			go handleMessage(conn, addr, handler, msg)
+			go ping(svc, id, conn, addr, handler, msg)
+			go cancel(handler)
 		}
 		return res
+	}
+}
+
+func cancel(h *coap.Handler) {
+	<-h.Cancel
+	close(h.Messages)
+	h.Ticker.Stop()
+	h.StoreExpired(true)
+}
+
+func handleMessage(conn *net.UDPConn, addr *net.UDPAddr, h *coap.Handler, msg *gocoap.Message) {
+	notifyMsg := *msg
+	notifyMsg.Type = gocoap.NonConfirmable
+	notifyMsg.Code = gocoap.Content
+	notifyMsg.RemoveOption(gocoap.URIQuery)
+	for {
+		msg, ok := <-h.Messages
+		if !ok {
+			return
+		}
+		payload, err := json.Marshal(msg)
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Failed to parse received message: %s", err))
+			continue
+		}
+		notifyMsg.Payload = payload
+		notifyMsg.MessageID = h.LoadMessageID()
+		buff := new(bytes.Buffer)
+		now := time.Now().UnixNano() / timestamp
+		if err := binary.Write(buff, binary.BigEndian, now); err != nil {
+			continue
+		}
+
+		observeVal := buff.Bytes()
+		notifyMsg.SetOption(gocoap.Observe, observeVal[len(observeVal)-3:])
+
+		if err := gocoap.Transmit(conn, addr, notifyMsg); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to send message to observer: %s", err))
+		}
+	}
+}
+
+func ping(svc coap.Service, clientID string, conn *net.UDPConn, addr *net.UDPAddr, h *coap.Handler, msg *gocoap.Message) {
+	pingMsg := *msg
+	pingMsg.Payload = []byte{}
+	pingMsg.Type = gocoap.Confirmable
+	pingMsg.RemoveOption(gocoap.URIQuery)
+	for {
+		select {
+		case _, ok := <-h.Ticker.C:
+			if !ok || h.LoadExpired() {
+				return
+			}
+
+			h.StoreExpired(true)
+			timeout := float64(coap.AckTimeout)
+			logger.Info(fmt.Sprintf("Ping client %s.", clientID))
+			for i := 0; i < coap.MaxRetransmit; i++ {
+				pingMsg.MessageID = h.LoadMessageID()
+				gocoap.Transmit(conn, addr, pingMsg)
+				time.Sleep(time.Duration(timeout * coap.AckRandomFactor))
+				if !h.LoadExpired() {
+					break
+				}
+				timeout = 2 * timeout
+			}
+			if h.LoadExpired() {
+				svc.Unsubscribe(clientID)
+				return
+			}
+		case <-h.Cancel:
+			return
+		}
 	}
 }

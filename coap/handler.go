@@ -1,26 +1,10 @@
 package coap
 
 import (
-	"bytes"
-	"encoding/binary"
-	"encoding/json"
-	"net"
 	"sync"
 	"time"
 
-	gocoap "github.com/dustin/go-coap"
 	"github.com/mainflux/mainflux"
-)
-
-const (
-	ackRandomFactor = 1.5
-
-	// ackTimeout is the amount of time to wait for a response.
-	ackTimeout = 2000 * time.Millisecond
-	// maxRetransmit is the maximum number of times a message will be retransmitted.
-	maxRetransmit = 4
-	// Approximately number of supported requests per second
-	timestamp = int64(time.Millisecond) * 3
 )
 
 // Handler is used to handle CoAP subscription.
@@ -33,6 +17,10 @@ type Handler struct {
 	// and removed from the Service map.
 	expired bool
 
+	// Message ID for notification messages.
+	msgID uint16
+
+	expiredLock, msgIDLock sync.Mutex
 	// Messages is used to receive messages from NATS.
 	Messages chan mainflux.RawMessage
 
@@ -41,65 +29,16 @@ type Handler struct {
 
 	// Cancel channel is used to cancel observing resource.
 	Cancel chan bool
-
-	// Address represents UDP address of corresponding client.
-	// Address net.UDPAddr
-	msgID uint16
-
-	// Conn and addr are used to exchange messages with client.
-	conn *net.UDPConn
-	addr *net.UDPAddr
-
-	expiredLock, msgIDLock sync.Mutex
 }
 
-func (h *Handler) cancel() {
-	<-h.Cancel
-	println("Close messages...")
-	close(h.Messages)
-	println("Close cancel...")
-	close(h.Cancel)
-	println("Stop ticker...")
-	h.Ticker.Stop()
-	println("Killed...")
-}
-
-func (h *Handler) sendMessage(msg *gocoap.Message) error {
-	if msg == nil {
-		return nil
-	}
-
-	msg.MessageID = h.LoadMessageID()
-	if !msg.IsConfirmable() {
-		buff := new(bytes.Buffer)
-		now := time.Now().UnixNano() / timestamp
-		if err := binary.Write(buff, binary.BigEndian, now); err != nil {
-			return err
-		}
-
-		observeVal := buff.Bytes()
-		msg.SetOption(gocoap.Observe, observeVal[len(observeVal)-3:])
-	}
-
-	return gocoap.Transmit(h.conn, h.addr, *msg)
-}
-
-func (h *Handler) handleMessage(msg *gocoap.Message) {
-	notifyMsg := *msg
-	notifyMsg.Type = gocoap.NonConfirmable
-	notifyMsg.Code = gocoap.Content
-	notifyMsg.RemoveOption(gocoap.URIQuery)
-	for {
-		msg, ok := <-h.Messages
-		if !ok {
-			return
-		}
-		payload, err := json.Marshal(msg)
-		if err != nil {
-			continue
-		}
-		notifyMsg.Payload = payload
-		h.sendMessage(&notifyMsg)
+// NewHandler instantiates a new Handler for an observer.
+func NewHandler() *Handler {
+	return &Handler{
+		Messages: make(chan mainflux.RawMessage),
+		// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
+		// 24 hours. Since 24 hours is too long for our purposes, we use 12.
+		Ticker: time.NewTicker(12 * time.Hour),
+		Cancel: make(chan bool),
 	}
 }
 
@@ -107,6 +46,7 @@ func (h *Handler) handleMessage(msg *gocoap.Message) {
 func (h *Handler) LoadExpired() bool {
 	h.expiredLock.Lock()
 	defer h.expiredLock.Unlock()
+
 	return h.expired
 }
 
@@ -114,6 +54,7 @@ func (h *Handler) LoadExpired() bool {
 func (h *Handler) StoreExpired(val bool) {
 	h.expiredLock.Lock()
 	defer h.expiredLock.Unlock()
+
 	h.expired = val
 }
 
@@ -122,34 +63,7 @@ func (h *Handler) StoreExpired(val bool) {
 func (h *Handler) LoadMessageID() uint16 {
 	h.msgIDLock.Lock()
 	defer h.msgIDLock.Unlock()
+
 	h.msgID++
 	return h.msgID
-}
-
-func (h *Handler) ping(svc Service, clientID string, msg *gocoap.Message) {
-	pingMsg := *msg
-	pingMsg.Payload = []byte{}
-	pingMsg.Type = gocoap.Confirmable
-	pingMsg.RemoveOption(gocoap.URIQuery)
-
-	for {
-		_, ok := <-h.Ticker.C
-		if !ok {
-			return
-		}
-		h.StoreExpired(true)
-		timeout := float64(ackTimeout)
-		for i := 0; i < maxRetransmit; i++ {
-			h.sendMessage(&pingMsg)
-			time.Sleep(time.Duration(timeout * ackRandomFactor))
-			if !h.LoadExpired() {
-				break
-			}
-			timeout = 2 * timeout
-		}
-		if h.LoadExpired() {
-			svc.Unsubscribe(clientID)
-			return
-		}
-	}
 }
