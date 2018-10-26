@@ -224,7 +224,6 @@ func observe(svc coap.Service, responses chan<- string) handler {
 func cancel(h *coap.Handler) {
 	<-h.Cancel
 	close(h.Messages)
-	h.Ticker.Stop()
 	h.StoreExpired(true)
 }
 
@@ -266,6 +265,7 @@ func ping(svc coap.Service, clientID string, conn *net.UDPConn, addr *net.UDPAdd
 	pingMsg.Payload = []byte{}
 	pingMsg.Type = gocoap.Confirmable
 	pingMsg.RemoveOption(gocoap.URIQuery)
+	defer h.Ticker.Stop()
 	for {
 		select {
 		case _, ok := <-h.Ticker.C:
