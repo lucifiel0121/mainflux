@@ -2,7 +2,6 @@ package coap
 
 import (
 	"sync"
-	"time"
 
 	"github.com/mainflux/mainflux"
 )
@@ -21,13 +20,13 @@ type Handler struct {
 	msgID uint16
 
 	expiredLock, msgIDLock sync.Mutex
+
 	// Messages is used to receive messages from NATS.
 	Messages chan mainflux.RawMessage
 
-	// Ticker is used to send CON message every 24 hours.
-	Ticker *time.Ticker
-
 	// Cancel channel is used to cancel observing resource.
+	// Cancel channel should not be used to send or receive any
+	// data, it's purpose is to be closed once handler canceled.
 	Cancel chan bool
 }
 
@@ -35,10 +34,7 @@ type Handler struct {
 func NewHandler() *Handler {
 	return &Handler{
 		Messages: make(chan mainflux.RawMessage),
-		// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
-		// 24 hours. Since 24 hours is too long for our purposes, we use 12.
-		Ticker: time.NewTicker(12 * time.Hour),
-		Cancel: make(chan bool),
+		Cancel:   make(chan bool),
 	}
 }
 

@@ -246,8 +246,9 @@ func handleMessage(conn *net.UDPConn, addr *net.UDPAddr, h *coap.Handler, msg *g
 		notifyMsg.Payload = payload
 		notifyMsg.MessageID = h.LoadMessageID()
 		buff := new(bytes.Buffer)
-		now := time.Now().UnixNano() / timestamp
-		if err := binary.Write(buff, binary.BigEndian, now); err != nil {
+		observe := uint64(notifyMsg.MessageID)
+		if err := binary.Write(buff, binary.BigEndian, observe); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to generate Observe option value: %s", err))
 			continue
 		}
 
@@ -265,10 +266,13 @@ func ping(svc coap.Service, clientID string, conn *net.UDPConn, addr *net.UDPAdd
 	pingMsg.Payload = []byte{}
 	pingMsg.Type = gocoap.Confirmable
 	pingMsg.RemoveOption(gocoap.URIQuery)
-	defer h.Ticker.Stop()
+	// According to RFC (https://tools.ietf.org/html/rfc7641#page-18), CON message must be sent at least every
+	// 24 hours. Since 24 hours is too long for our purposes, we use 12.
+	t := time.NewTicker(12 * time.Hour)
+	defer t.Stop()
 	for {
 		select {
-		case _, ok := <-h.Ticker.C:
+		case _, ok := <-t.C:
 			if !ok || h.LoadExpired() {
 				return
 			}

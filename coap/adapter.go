@@ -29,8 +29,6 @@ const (
 	AckTimeout = 2000 * time.Millisecond
 	// MaxRetransmit is the maximum number of times a message will be retransmitted.
 	MaxRetransmit = 4
-	// Timestamp is approximately number of supported requests per second
-	Timestamp = int64(time.Millisecond) * 3
 )
 
 var (
