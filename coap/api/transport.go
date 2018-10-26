@@ -179,61 +179,61 @@ func observe(svc coap.Service, responses chan<- string) handler {
 		}
 		res.SetOption(gocoap.ContentFormat, gocoap.AppJSON)
 
-		channelID := mux.Var(msg, "id")
-		cid, err := strconv.ParseUint(channelID, 10, 64)
+		id := mux.Var(msg, "id")
+		chanID, err := strconv.ParseUint(id, 10, 64)
 		if err != nil {
 			res.Code = gocoap.NotFound
 			return res
 		}
 
-		publisher, err := authorize(msg, res, cid)
+		publisher, err := authorize(msg, res, chanID)
 		if err != nil {
 			res.Code = gocoap.Forbidden
 			logger.Warn(fmt.Sprintf("Failed to authorize: %s", err))
 			return res
 		}
 
-		id := fmt.Sprintf("%x-%d-%d", msg.Token, publisher, cid)
+		obsID := fmt.Sprintf("%x-%d-%d", msg.Token, publisher, chanID)
 
 		if msg.Type == gocoap.Acknowledgement {
-			responses <- id
+			responses <- obsID
 			return nil
 		}
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); (ok && value == 1) || msg.Type == gocoap.Reset {
-			svc.Unsubscribe(id)
+			svc.Unsubscribe(obsID)
 		}
 
 		if value, ok := msg.Option(gocoap.Observe).(uint32); ok && value == 0 {
 			res.AddOption(gocoap.Observe, 1)
-			handler := coap.NewHandler()
-			if err := svc.Subscribe(cid, id, handler); err != nil {
+			o := coap.NewObserver()
+			if err := svc.Subscribe(chanID, obsID, o); err != nil {
 				logger.Warn(fmt.Sprintf("Failed to subscribe to NATS subject: %s", err))
 				res.Code = gocoap.InternalServerError
 				return res
 			}
 
-			go handleMessage(conn, addr, handler, msg)
-			go ping(svc, id, conn, addr, handler, msg)
-			go cancel(handler)
+			go handleMessage(conn, addr, o, msg)
+			go ping(svc, obsID, conn, addr, o, msg)
+			go cancel(o)
 		}
 		return res
 	}
 }
 
-func cancel(h *coap.Handler) {
-	<-h.Cancel
-	close(h.Messages)
-	h.StoreExpired(true)
+func cancel(observer *coap.Observer) {
+	<-observer.Cancel
+	close(observer.Messages)
+	observer.StoreExpired(true)
 }
 
-func handleMessage(conn *net.UDPConn, addr *net.UDPAddr, h *coap.Handler, msg *gocoap.Message) {
+func handleMessage(conn *net.UDPConn, addr *net.UDPAddr, o *coap.Observer, msg *gocoap.Message) {
 	notifyMsg := *msg
 	notifyMsg.Type = gocoap.NonConfirmable
 	notifyMsg.Code = gocoap.Content
 	notifyMsg.RemoveOption(gocoap.URIQuery)
 	for {
-		msg, ok := <-h.Messages
+		msg, ok := <-o.Messages
 		if !ok {
 			return
 		}
@@ -244,7 +244,7 @@ func handleMessage(conn *net.UDPConn, addr *net.UDPAddr, h *coap.Handler, msg *g
 		}
 
 		notifyMsg.Payload = payload
-		notifyMsg.MessageID = h.LoadMessageID()
+		notifyMsg.MessageID = o.LoadMessageID()
 		buff := new(bytes.Buffer)
 		observe := uint64(notifyMsg.MessageID)
 		if err := binary.Write(buff, binary.BigEndian, observe); err != nil {
@@ -261,7 +261,7 @@ func handleMessage(conn *net.UDPConn, addr *net.UDPAddr, h *coap.Handler, msg *g
 	}
 }
 
-func ping(svc coap.Service, clientID string, conn *net.UDPConn, addr *net.UDPAddr, h *coap.Handler, msg *gocoap.Message) {
+func ping(svc coap.Service, obsID string, conn *net.UDPConn, addr *net.UDPAddr, o *coap.Observer, msg *gocoap.Message) {
 	pingMsg := *msg
 	pingMsg.Payload = []byte{}
 	pingMsg.Type = gocoap.Confirmable
@@ -273,28 +273,28 @@ func ping(svc coap.Service, clientID string, conn *net.UDPConn, addr *net.UDPAdd
 	for {
 		select {
 		case _, ok := <-t.C:
-			if !ok || h.LoadExpired() {
+			if !ok || o.LoadExpired() {
 				return
 			}
 
-			h.StoreExpired(true)
+			o.StoreExpired(true)
 			timeout := float64(coap.AckTimeout)
-			logger.Info(fmt.Sprintf("Ping client %s.", clientID))
+			logger.Info(fmt.Sprintf("Ping client %s.", obsID))
 			for i := 0; i < coap.MaxRetransmit; i++ {
-				pingMsg.MessageID = h.LoadMessageID()
+				pingMsg.MessageID = o.LoadMessageID()
 				gocoap.Transmit(conn, addr, pingMsg)
 				time.Sleep(time.Duration(timeout * coap.AckRandomFactor))
-				if !h.LoadExpired() {
+				if !o.LoadExpired() {
 					break
 				}
 				timeout = 2 * timeout
 			}
 
-			if h.LoadExpired() {
-				svc.Unsubscribe(clientID)
+			if o.LoadExpired() {
+				svc.Unsubscribe(obsID)
 				return
 			}
-		case <-h.Cancel:
+		case <-o.Cancel:
 			return
 		}
 	}

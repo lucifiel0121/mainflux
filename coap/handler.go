@@ -6,13 +6,13 @@ import (
 	"github.com/mainflux/mainflux"
 )
 
-// Handler is used to handle CoAP subscription.
-type Handler struct {
+// Observer is used to handle CoAP subscription.
+type Observer struct {
 	// Expired flag is used to mark that ticker sent a
 	// CON message, but response is not received yet.
 	// The flag changes its value once ACK message is
 	// received from the client. If Expired is true
-	// when ticker is triggered, Handler should be canceled
+	// when ticker is triggered, Observer should be canceled
 	// and removed from the Service map.
 	expired bool
 
@@ -26,40 +26,40 @@ type Handler struct {
 
 	// Cancel channel is used to cancel observing resource.
 	// Cancel channel should not be used to send or receive any
-	// data, it's purpose is to be closed once handler canceled.
+	// data, it's purpose is to be closed once Observer canceled.
 	Cancel chan bool
 }
 
-// NewHandler instantiates a new Handler for an observer.
-func NewHandler() *Handler {
-	return &Handler{
+// NewObserver instantiates a new Observer.
+func NewObserver() *Observer {
+	return &Observer{
 		Messages: make(chan mainflux.RawMessage),
 		Cancel:   make(chan bool),
 	}
 }
 
 // LoadExpired reads Expired flag in thread-safe way.
-func (h *Handler) LoadExpired() bool {
-	h.expiredLock.Lock()
-	defer h.expiredLock.Unlock()
+func (o *Observer) LoadExpired() bool {
+	o.expiredLock.Lock()
+	defer o.expiredLock.Unlock()
 
-	return h.expired
+	return o.expired
 }
 
 // StoreExpired stores Expired flag in thread-safe way.
-func (h *Handler) StoreExpired(val bool) {
-	h.expiredLock.Lock()
-	defer h.expiredLock.Unlock()
+func (o *Observer) StoreExpired(val bool) {
+	o.expiredLock.Lock()
+	defer o.expiredLock.Unlock()
 
-	h.expired = val
+	o.expired = val
 }
 
 // LoadMessageID reads MessageID and increments
 // its value in thread-safe way.
-func (h *Handler) LoadMessageID() uint16 {
-	h.msgIDLock.Lock()
-	defer h.msgIDLock.Unlock()
+func (o *Observer) LoadMessageID() uint16 {
+	o.msgIDLock.Lock()
+	defer o.msgIDLock.Unlock()
 
-	h.msgID++
-	return h.msgID
+	o.msgID++
+	return o.msgID
 }

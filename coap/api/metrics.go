@@ -43,13 +43,13 @@ func (mm *metricsMiddleware) Publish(msg mainflux.RawMessage) error {
 	return mm.svc.Publish(msg)
 }
 
-func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, handler *coap.Handler) error {
+func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, o *coap.Observer) error {
 	defer func(begin time.Time) {
 		mm.counter.With("method", "subscribe").Add(1)
 		mm.latency.With("method", "subscribe").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
-	return mm.svc.Subscribe(chanID, clientID, handler)
+	return mm.svc.Subscribe(chanID, clientID, o)
 }
 
 func (mm *metricsMiddleware) Unsubscribe(clientID string) {

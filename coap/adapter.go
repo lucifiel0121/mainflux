@@ -49,7 +49,7 @@ type Broker interface {
 
 	// Subscribes to channel with specified id and adds subscription to
 	// service map of subscriptions under given ID.
-	Subscribe(uint64, string, *Handler) error
+	Subscribe(uint64, string, *Observer) error
 }
 
 // Service specifies coap service API.
@@ -62,51 +62,51 @@ type Service interface {
 var _ Service = (*adapterService)(nil)
 
 type adapterService struct {
-	pubsub   Broker
-	handlers map[string]*Handler
-	mu       sync.Mutex
+	pubsub  Broker
+	obs     map[string]*Observer
+	obsLock sync.Mutex
 }
 
 // New instantiates the CoAP adapter implementation.
 func New(pubsub Broker, responses <-chan string) Service {
 	as := &adapterService{
-		pubsub:   pubsub,
-		handlers: make(map[string]*Handler),
-		mu:       sync.Mutex{},
+		pubsub:  pubsub,
+		obs:     make(map[string]*Observer),
+		obsLock: sync.Mutex{},
 	}
 
 	go as.listenResponses(responses)
 	return as
 }
 
-func (svc *adapterService) get(clientID string) (*Handler, bool) {
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
+func (svc *adapterService) get(obsID string) (*Observer, bool) {
+	svc.obsLock.Lock()
+	defer svc.obsLock.Unlock()
 
-	obs, ok := svc.handlers[clientID]
-	return obs, ok
+	val, ok := svc.obs[obsID]
+	return val, ok
 }
 
-func (svc *adapterService) put(clientID string, handler *Handler) {
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
+func (svc *adapterService) put(obsID string, o *Observer) {
+	svc.obsLock.Lock()
+	defer svc.obsLock.Unlock()
 
-	h, ok := svc.handlers[clientID]
+	val, ok := svc.obs[obsID]
 	if ok {
-		close(h.Cancel)
-		delete(svc.handlers, clientID)
+		close(val.Cancel)
 	}
-	svc.handlers[clientID] = handler
+
+	svc.obs[obsID] = o
 }
 
-func (svc *adapterService) remove(clientID string) {
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
+func (svc *adapterService) remove(obsID string) {
+	svc.obsLock.Lock()
+	defer svc.obsLock.Unlock()
 
-	h, ok := svc.handlers[clientID]
+	val, ok := svc.obs[obsID]
 	if ok {
-		close(h.Cancel)
-		delete(svc.handlers, clientID)
+		close(val.Cancel)
+		delete(svc.obs, obsID)
 	}
 }
 
@@ -115,9 +115,9 @@ func (svc *adapterService) listenResponses(responses <-chan string) {
 	for {
 		id := <-responses
 
-		h, ok := svc.get(id)
+		val, ok := svc.get(id)
 		if ok {
-			h.StoreExpired(false)
+			val.StoreExpired(false)
 		}
 	}
 }
@@ -135,16 +135,16 @@ func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 	return nil
 }
 
-func (svc *adapterService) Subscribe(chanID uint64, clientID string, handler *Handler) error {
-	if err := svc.pubsub.Subscribe(chanID, clientID, handler); err != nil {
+func (svc *adapterService) Subscribe(chanID uint64, obsID string, o *Observer) error {
+	if err := svc.pubsub.Subscribe(chanID, obsID, o); err != nil {
 		return ErrFailedSubscription
 	}
 
-	// Put method removes subscription if already exists.
-	svc.put(clientID, handler)
+	// Put method removes Observer if already exists.
+	svc.put(obsID, o)
 	return nil
 }
 
-func (svc *adapterService) Unsubscribe(clientID string) {
-	svc.remove(clientID)
+func (svc *adapterService) Unsubscribe(obsID string) {
+	svc.remove(obsID)
 }

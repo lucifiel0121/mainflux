@@ -40,7 +40,7 @@ func (pubsub *natsPublisher) Publish(msg mainflux.RawMessage) error {
 	return pubsub.nc.Publish(subject, data)
 }
 
-func (pubsub *natsPublisher) Subscribe(chanID uint64, clientID string, handler *coap.Handler) error {
+func (pubsub *natsPublisher) Subscribe(chanID uint64, obsID string, observer *coap.Observer) error {
 	sub, err := pubsub.nc.Subscribe(fmt.Sprintf("%s.%d", prefix, chanID), func(msg *broker.Msg) {
 		if msg == nil {
 			return
@@ -49,14 +49,14 @@ func (pubsub *natsPublisher) Subscribe(chanID uint64, clientID string, handler *
 		if err := proto.Unmarshal(msg.Data, &rawMsg); err != nil {
 			return
 		}
-		handler.Messages <- rawMsg
+		observer.Messages <- rawMsg
 	})
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		<-handler.Cancel
+		<-observer.Cancel
 		sub.Unsubscribe()
 	}()
 
