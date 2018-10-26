@@ -243,6 +243,7 @@ func handleMessage(conn *net.UDPConn, addr *net.UDPAddr, h *coap.Handler, msg *g
 			logger.Warn(fmt.Sprintf("Failed to parse received message: %s", err))
 			continue
 		}
+
 		notifyMsg.Payload = payload
 		notifyMsg.MessageID = h.LoadMessageID()
 		buff := new(bytes.Buffer)
@@ -284,6 +285,7 @@ func ping(svc coap.Service, clientID string, conn *net.UDPConn, addr *net.UDPAdd
 				}
 				timeout = 2 * timeout
 			}
+
 			if h.LoadExpired() {
 				svc.Unsubscribe(clientID)
 				return

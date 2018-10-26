@@ -48,6 +48,7 @@ func (mm *metricsMiddleware) Subscribe(chanID uint64, clientID string, handler *
 		mm.counter.With("method", "subscribe").Add(1)
 		mm.latency.With("method", "subscribe").Observe(time.Since(begin).Seconds())
 	}(time.Now())
+
 	return mm.svc.Subscribe(chanID, clientID, handler)
 }
 
@@ -56,5 +57,6 @@ func (mm *metricsMiddleware) Unsubscribe(clientID string) {
 		mm.counter.With("method", "unsubscribe").Add(1)
 		mm.latency.With("method", "unsubscribe").Observe(time.Since(begin).Seconds())
 	}(time.Now())
+
 	mm.svc.Unsubscribe(clientID)
 }

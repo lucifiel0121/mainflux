@@ -64,17 +64,17 @@ type Service interface {
 var _ Service = (*adapterService)(nil)
 
 type adapterService struct {
-	pubsub Broker
-	subs   map[string]*Handler
-	mu     sync.Mutex
+	pubsub   Broker
+	handlers map[string]*Handler
+	mu       sync.Mutex
 }
 
 // New instantiates the CoAP adapter implementation.
 func New(pubsub Broker, responses <-chan string) Service {
 	as := &adapterService{
-		pubsub: pubsub,
-		subs:   make(map[string]*Handler),
-		mu:     sync.Mutex{},
+		pubsub:   pubsub,
+		handlers: make(map[string]*Handler),
+		mu:       sync.Mutex{},
 	}
 
 	go as.listenResponses(responses)
@@ -85,7 +85,7 @@ func (svc *adapterService) get(clientID string) (*Handler, bool) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
 
-	obs, ok := svc.subs[clientID]
+	obs, ok := svc.handlers[clientID]
 	return obs, ok
 }
 
@@ -93,17 +93,17 @@ func (svc *adapterService) put(clientID string, handler *Handler) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
 
-	svc.subs[clientID] = handler
+	svc.handlers[clientID] = handler
 }
 
 func (svc *adapterService) remove(clientID string) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
 
-	h, ok := svc.subs[clientID]
+	h, ok := svc.handlers[clientID]
 	if ok {
 		close(h.Cancel)
-		delete(svc.subs, clientID)
+		delete(svc.handlers, clientID)
 	}
 }
 
