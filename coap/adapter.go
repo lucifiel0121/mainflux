@@ -93,6 +93,11 @@ func (svc *adapterService) put(clientID string, handler *Handler) {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
 
+	h, ok := svc.handlers[clientID]
+	if ok {
+		close(h.Cancel)
+		delete(svc.handlers, clientID)
+	}
 	svc.handlers[clientID] = handler
 }
 
@@ -133,13 +138,11 @@ func (svc *adapterService) Publish(msg mainflux.RawMessage) error {
 }
 
 func (svc *adapterService) Subscribe(chanID uint64, clientID string, handler *Handler) error {
-	// Remove entry if already exists.
-	svc.remove(clientID)
-
 	if err := svc.pubsub.Subscribe(chanID, clientID, handler); err != nil {
 		return ErrFailedSubscription
 	}
 
+	// Put method removes subscription if already exists.
 	svc.put(clientID, handler)
 	return nil
 }
