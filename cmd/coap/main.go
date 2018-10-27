@@ -118,7 +118,7 @@ func loadConfig() config {
 
 func startHTTPServer(port string, logger logger.Logger, errs chan error) {
 	p := fmt.Sprintf(":%s", port)
-	logger.Info(fmt.Sprintf("Things service started, exposed port %s", port))
+	logger.Info(fmt.Sprintf("CoAP service started, exposed port %s", port))
 	errs <- http.ListenAndServe(p, api.MakeHTTPHandler())
 }
 

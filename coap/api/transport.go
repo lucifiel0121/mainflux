@@ -30,14 +30,7 @@ import (
 	"github.com/mainflux/mainflux"
 )
 
-const (
-	maxPktLen = 1500
-	network   = "udp"
-	protocol  = "coap"
-	chanID    = "id"
-	// Approximately number of supported requests per second
-	timestamp = int64(time.Millisecond) * 31
-)
+const protocol = "coap"
 
 var (
 	errBadRequest = errors.New("bad request")
@@ -61,7 +54,7 @@ func notFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 //MakeHTTPHandler creates handler for version endpoint.
 func MakeHTTPHandler() http.Handler {
 	b := bone.New()
-	b.GetFunc("/version", mainflux.Version("CoAP"))
+	b.GetFunc("/version", mainflux.Version(protocol))
 
 	return b
 }
