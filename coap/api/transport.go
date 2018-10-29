@@ -22,6 +22,7 @@ import (
 	"github.com/go-zoo/bone"
 	"github.com/mainflux/mainflux/coap"
 	log "github.com/mainflux/mainflux/logger"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -55,6 +56,7 @@ func notFoundHandler(l *net.UDPConn, a *net.UDPAddr, m *gocoap.Message) *gocoap.
 func MakeHTTPHandler() http.Handler {
 	b := bone.New()
 	b.GetFunc("/version", mainflux.Version(protocol))
+	b.Handle("/metrics", promhttp.Handler())
 
 	return b
 }
