@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/mainflux/mainflux/readers"
 
@@ -58,7 +59,7 @@ func (repo *influxRepository) ReadAll(chanID, offset, limit uint64) []mainflux.M
 }
 
 // GenMessage and parseFloat are util methods. Since InfluxDB client returns
-// results in some proprietary from, this obscure message conversion is needed
+// results in some proprietary form, this obscure message conversion is needed
 // to return actual []mainflux.Message from the query result.
 func parseFloat(value interface{}) float64 {
 	switch value.(type) {
@@ -76,6 +77,25 @@ func genMessage(names []string, fields []interface{}) mainflux.Message {
 	m := mainflux.Message{}
 	v := reflect.ValueOf(&m).Elem()
 	for i, name := range names {
+		if strings.HasSuffix(name, "Value") {
+			switch fields[i].(type) {
+			case bool:
+				m.Values = &mainflux.Message_BoolValue{fields[i].(bool)}
+			case json.Number:
+				num, _ := fields[i].(json.Number).Float64()
+				m.Values = &mainflux.Message_Value{num}
+			case string:
+				if strings.HasPrefix(name, "String") {
+					m.Values = &mainflux.Message_StringValue{fields[i].(string)}
+					break
+				}
+				if strings.HasPrefix(name, "Data") {
+					m.Values = &mainflux.Message_DataValue{fields[i].(string)}
+				}
+			}
+			continue
+		}
+
 		msgField := v.FieldByName(name)
 		if !msgField.IsValid() {
 			continue
