@@ -34,19 +34,16 @@ var (
 
 func TestSave(t *testing.T) {
 	msg := mainflux.Message{
-		Channel:     45,
-		Publisher:   2580,
-		Protocol:    "http",
-		Name:        "test name",
-		Unit:        "km",
-		Value:       24,
-		StringValue: "24",
-		BoolValue:   false,
-		DataValue:   "dataValue",
-		ValueSum:    24,
-		Time:        13451312,
-		UpdateTime:  5456565466,
-		Link:        "link",
+		Channel:    45,
+		Publisher:  2580,
+		Protocol:   "http",
+		Name:       "test name",
+		Unit:       "km",
+		Values:     &mainflux.Message_Value{24},
+		ValueSum:   &mainflux.Sum{Value: 24},
+		Time:       13451312,
+		UpdateTime: 5456565466,
+		Link:       "link",
 	}
 
 	client, err := mongo.Connect(context.Background(), addr, nil)
