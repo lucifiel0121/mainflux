@@ -58,4 +58,4 @@ MF_THINGS_URL=[Things service URL] MF_NATS_URL=[NATS instance URL] MF_COAP_ADAPT
 ## Usage
 
 Since CoAP protocol does not support `Authorization` header (option), in order to send CoAP messages,
-client valid key must be present in `Uri-Query` option.
+client valid `authorization` value must be present in `Uri-Query` option.

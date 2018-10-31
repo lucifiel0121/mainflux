@@ -14,9 +14,11 @@ func authKey(opt interface{}) (string, error) {
 	if !ok {
 		return "", errBadRequest
 	}
+
 	arr := strings.Split(val, "=")
-	if len(arr) != 2 || strings.ToLower(arr[0]) != "key" {
+	if len(arr) != 2 || strings.ToLower(arr[0]) != "authorization" {
 		return "", errBadOption
 	}
+
 	return arr[1], nil
 }
