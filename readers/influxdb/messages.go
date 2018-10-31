@@ -52,54 +52,58 @@ func (repo *influxRepository) ReadAll(chanID, offset, limit uint64) []mainflux.M
 	}
 	result := resp.Results[0].Series[0]
 	for _, v := range result.Values {
-		ret = append(ret, genMessage(result.Columns, v))
+		ret = append(ret, parseMessage(result.Columns, v))
 	}
 
 	return ret
 }
 
-// GenMessage and parseFloat are util methods. Since InfluxDB client returns
+// ParseMessage and parseValues are util methods. Since InfluxDB client returns
 // results in some proprietary form, this obscure message conversion is needed
 // to return actual []mainflux.Message from the query result.
-func parseFloat(value interface{}) float64 {
-	switch value.(type) {
-	case string:
-		ret, _ := strconv.ParseFloat(value.(string), 64)
-		return ret
-	case json.Number:
-		ret, _ := strconv.ParseFloat((value.(json.Number)).String(), 64)
-		return ret
+func parseValues(value interface{}, name string, msg *mainflux.Message) {
+	if name == "ValueSum" && value != nil {
+		if sum, ok := value.(json.Number); ok {
+			valSum, err := sum.Float64()
+			if err != nil {
+				return
+			}
+			msg.ValueSum = &mainflux.Sum{Value: valSum}
+		}
+		return
 	}
-	return 0
+	if strings.HasSuffix(name, "Value") {
+		switch value.(type) {
+		case bool:
+			msg.Values = &mainflux.Message_BoolValue{value.(bool)}
+		case json.Number:
+			num, err := value.(json.Number).Float64()
+			if err != nil {
+				return
+			}
+			msg.Values = &mainflux.Message_Value{num}
+		case string:
+			if strings.HasPrefix(name, "String") {
+				msg.Values = &mainflux.Message_StringValue{value.(string)}
+				return
+			}
+			if strings.HasPrefix(name, "Data") {
+				msg.Values = &mainflux.Message_DataValue{value.(string)}
+			}
+		}
+	}
 }
 
-func genMessage(names []string, fields []interface{}) mainflux.Message {
+func parseMessage(names []string, fields []interface{}) mainflux.Message {
 	m := mainflux.Message{}
 	v := reflect.ValueOf(&m).Elem()
 	for i, name := range names {
-		if strings.HasSuffix(name, "Value") {
-			switch fields[i].(type) {
-			case bool:
-				m.Values = &mainflux.Message_BoolValue{fields[i].(bool)}
-			case json.Number:
-				num, _ := fields[i].(json.Number).Float64()
-				m.Values = &mainflux.Message_Value{num}
-			case string:
-				if strings.HasPrefix(name, "String") {
-					m.Values = &mainflux.Message_StringValue{fields[i].(string)}
-					break
-				}
-				if strings.HasPrefix(name, "Data") {
-					m.Values = &mainflux.Message_DataValue{fields[i].(string)}
-				}
-			}
-			continue
-		}
-
+		parseValues(fields[i], name, &m)
 		msgField := v.FieldByName(name)
 		if !msgField.IsValid() {
 			continue
 		}
+
 		f := msgField.Interface()
 		switch f.(type) {
 		case string:
@@ -110,11 +114,8 @@ func genMessage(names []string, fields []interface{}) mainflux.Message {
 			u, _ := strconv.ParseUint(fields[i].(string), 10, 64)
 			msgField.SetUint(u)
 		case float64:
-			msgField.SetFloat(parseFloat(fields[i]))
-		case bool:
-			if b, ok := fields[i].(bool); ok {
-				msgField.SetBool(b)
-			}
+			val, _ := strconv.ParseFloat(fields[i].(string), 64)
+			msgField.SetFloat(val)
 		}
 	}
 
