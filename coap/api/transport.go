@@ -113,7 +113,7 @@ func receive(svc coap.Service) handler {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
 		// By default message is NonConfirmable, so
 		// NonConfirmable response is sent back.
-		var res = &gocoap.Message{
+		res := &gocoap.Message{
 			Type: gocoap.NonConfirmable,
 			// According to https://tools.ietf.org/html/rfc7252#page-47: If the POST
 			// succeeds but does not result in a new resource being created on the
@@ -164,8 +164,7 @@ func receive(svc coap.Service) handler {
 
 func observe(svc coap.Service, responses chan<- string) handler {
 	return func(conn *net.UDPConn, addr *net.UDPAddr, msg *gocoap.Message) *gocoap.Message {
-		var res *gocoap.Message
-		res = &gocoap.Message{
+		res := &gocoap.Message{
 			Type:      gocoap.Acknowledgement,
 			Code:      gocoap.Content,
 			MessageID: msg.MessageID,
@@ -212,6 +211,7 @@ func observe(svc coap.Service, responses chan<- string) handler {
 			go ping(svc, obsID, conn, addr, o, msg)
 			go cancel(o)
 		}
+
 		return res
 	}
 }

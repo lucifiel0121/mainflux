@@ -42,28 +42,28 @@ const (
 )
 
 type config struct {
-	Port      string
-	NatsURL   string
-	ThingsURL string
-	LogLevel  string
+	port      string
+	natsURL   string
+	thingsURL string
+	logLevel  string
 }
 
 func main() {
 	cfg := loadConfig()
 
-	logger, err := logger.New(os.Stdout, cfg.LogLevel)
+	logger, err := logger.New(os.Stdout, cfg.logLevel)
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
 
-	nc, err := broker.Connect(cfg.NatsURL)
+	nc, err := broker.Connect(cfg.natsURL)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Failed to connect to NATS: %s", err))
 		os.Exit(1)
 	}
 	defer nc.Close()
 
-	conn, err := grpc.Dial(cfg.ThingsURL, grpc.WithInsecure())
+	conn, err := grpc.Dial(cfg.thingsURL, grpc.WithInsecure())
 	if err != nil {
 		logger.Error(fmt.Sprintf("Failed to connect to users service: %s", err))
 		os.Exit(1)
@@ -94,8 +94,8 @@ func main() {
 
 	errs := make(chan error, 2)
 
-	go startHTTPServer(cfg.Port, logger, errs)
-	go startCOAPServer(cfg.Port, svc, cc, respChan, logger, errs)
+	go startHTTPServer(cfg.port, logger, errs)
+	go startCOAPServer(cfg.port, svc, cc, respChan, logger, errs)
 
 	go func() {
 		c := make(chan os.Signal)
@@ -109,10 +109,10 @@ func main() {
 
 func loadConfig() config {
 	return config{
-		ThingsURL: mainflux.Env(envThingsURL, defThingsURL),
-		NatsURL:   mainflux.Env(envNatsURL, defNatsURL),
-		Port:      mainflux.Env(envPort, defPort),
-		LogLevel:  mainflux.Env(envLogLevel, defLogLevel),
+		thingsURL: mainflux.Env(envThingsURL, defThingsURL),
+		natsURL:   mainflux.Env(envNatsURL, defNatsURL),
+		port:      mainflux.Env(envPort, defPort),
+		logLevel:  mainflux.Env(envLogLevel, defLogLevel),
 	}
 }
 

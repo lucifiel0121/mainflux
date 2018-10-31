@@ -7,11 +7,7 @@
 
 package api
 
-import (
-	"strings"
-)
-
-const keyHeader = "key"
+import "strings"
 
 func authKey(opt interface{}) (string, error) {
 	val, ok := opt.(string)
@@ -19,7 +15,7 @@ func authKey(opt interface{}) (string, error) {
 		return "", errBadRequest
 	}
 	arr := strings.Split(val, "=")
-	if len(arr) != 2 || strings.ToLower(arr[0]) != keyHeader {
+	if len(arr) != 2 || strings.ToLower(arr[0]) != "key" {
 		return "", errBadOption
 	}
 	return arr[1], nil
