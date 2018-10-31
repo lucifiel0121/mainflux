@@ -31,8 +31,25 @@ func (cr *cassandraRepository) Save(msg mainflux.Message) error {
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	id := gocql.TimeUUID()
 
+	var val *float64
+	var strVal, dataVal *string
+	var boolVal *bool
+	switch msg.Values.(type) {
+	case *mainflux.Message_Value:
+		v := msg.GetValue()
+		val = &v
+	case *mainflux.Message_StringValue:
+		v := msg.GetStringValue()
+		strVal = &v
+	case *mainflux.Message_DataValue:
+		v := msg.GetDataValue()
+		dataVal = &v
+	case *mainflux.Message_BoolValue:
+		v := msg.GetBoolValue()
+		boolVal = &v
+	}
+
 	return cr.session.Query(cql, id, msg.GetChannel(), msg.GetPublisher(),
-		msg.GetProtocol(), msg.GetName(), msg.GetUnit(), msg.GetValue(),
-		msg.GetStringValue(), msg.GetBoolValue(), msg.GetDataValue(),
-		msg.GetValueSum(), msg.GetTime(), msg.GetUpdateTime(), msg.GetLink()).Exec()
+		msg.GetProtocol(), msg.GetName(), msg.GetUnit(), val,
+		strVal, boolVal, dataVal, msg.GetValueSum(), msg.GetTime(), msg.GetUpdateTime(), msg.GetLink()).Exec()
 }
