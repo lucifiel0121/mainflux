@@ -33,6 +33,7 @@ var (
 		Channel:   chanID,
 		Publisher: 1,
 		Protocol:  "mqtt",
+		Values:    &mainflux.Message_Value{5},
 	}
 	testLog, _ = log.New(os.Stdout, log.Info.String())
 )
