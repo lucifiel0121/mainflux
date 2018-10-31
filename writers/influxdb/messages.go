@@ -58,6 +58,7 @@ func New(client influxdata.Client, database string, batchSize int, batchTimeout 
 		},
 		batchSize: batchSize,
 	}
+
 	var err error
 	repo.batch, err = influxdata.NewBatchPoints(repo.cfg)
 	if err != nil {
@@ -148,7 +149,10 @@ func (repo *influxRepo) fieldsOf(msg *mainflux.Message) fields {
 		ret["DataValue"] = msg.GetDataValue()
 	case *mainflux.Message_BoolValue:
 		ret["BoolValue"] = msg.GetBoolValue()
-	default:
+	}
+
+	if msg.ValueSum != nil {
+		ret["ValueSum"] = msg.GetValueSum().GetValue()
 	}
 
 	return ret

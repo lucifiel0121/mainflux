@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const valueFields = 6
+
 var (
 	port          string
 	testLog, _    = log.New(os.Stdout, log.Info.String())
@@ -118,7 +120,6 @@ func TestSave(t *testing.T) {
 	cases := []struct {
 		desc         string
 		repo         writers.MessageRepository
-		previousMsgs int
 		numOfMsg     int
 		expectedSize int
 		isBatch      bool
@@ -144,7 +145,23 @@ func TestSave(t *testing.T) {
 		row, err := queryDB(dropMsgs)
 		require.Nil(t, err, fmt.Sprintf("Cleaning data from InfluxDB expected to succeed: %s.\n", err))
 
+		// Mix possible values as well as value sum.
 		for i := 0; i < tc.numOfMsg; i++ {
+			count := i % valueFields
+			switch count {
+			case 0:
+				msg.Values = &mainflux.Message_Value{5}
+			case 1:
+				msg.Values = &mainflux.Message_BoolValue{false}
+			case 2:
+				msg.Values = &mainflux.Message_StringValue{"value"}
+			case 3:
+				msg.Values = &mainflux.Message_DataValue{"base64data"}
+			case 4:
+				msg.ValueSum = nil
+			case 5:
+				msg.ValueSum = &mainflux.Sum{Value: 45}
+			}
 			err := tc.repo.Save(msg)
 			assert.Nil(t, err, fmt.Sprintf("Save operation expected to succeed: %s.\n", err))
 		}
