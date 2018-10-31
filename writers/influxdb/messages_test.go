@@ -72,7 +72,7 @@ func queryDB(cmd string) ([][]interface{}, error) {
 	return response.Results[0].Series[0].Values, nil
 }
 
-func TestNewWriter(t *testing.T) {
+func TestNew(t *testing.T) {
 	client, err := influxdata.NewHTTPClient(clientCfg)
 	require.Nil(t, err, fmt.Sprintf("Creating new InfluxDB client expected to succeed: %s.\n", err))
 
