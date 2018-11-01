@@ -24,12 +24,14 @@ import (
 )
 
 var (
-	port       string
-	addr       string
-	testLog, _ = log.New(os.Stdout, log.Info.String())
-	testDB     = "test"
-	collection = "mainflux"
-	db         mongo.Database
+	port        string
+	addr        string
+	testLog, _  = log.New(os.Stdout, log.Info.String())
+	testDB      = "test"
+	collection  = "mainflux"
+	db          mongo.Database
+	numMessages = 100
+	valueFields = 6
 )
 
 func TestSave(t *testing.T) {
@@ -51,11 +53,28 @@ func TestSave(t *testing.T) {
 
 	db := client.Database(testDB)
 	repo := mongodb.New(db)
-
-	err = repo.Save(msg)
+	// Mix possible values as well as value sum.
+	for i := 0; i < numMessages; i++ {
+		count := i % valueFields
+		switch count {
+		case 0:
+			msg.Values = &mainflux.Message_Value{5}
+		case 1:
+			msg.Values = &mainflux.Message_BoolValue{false}
+		case 2:
+			msg.Values = &mainflux.Message_StringValue{"value"}
+		case 3:
+			msg.Values = &mainflux.Message_DataValue{"base64data"}
+		case 4:
+			msg.ValueSum = nil
+		case 5:
+			msg.ValueSum = &mainflux.Sum{Value: 45}
+		}
+		err = repo.Save(msg)
+	}
 	assert.Nil(t, err, fmt.Sprintf("Save operation expected to succeed: %s.\n", err))
 
 	count, err := db.Collection(collection).Count(context.Background(), nil)
 	assert.Nil(t, err, fmt.Sprintf("Querying database expected to succeed: %s.\n", err))
-	assert.Equal(t, int64(1), count, fmt.Sprintf("Expected to have 1 value, found %d instead.\n", count))
+	assert.Equal(t, int64(numMessages), count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", numMessages, count))
 }
