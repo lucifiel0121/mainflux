@@ -31,7 +31,7 @@ func (cr *cassandraRepository) Save(msg mainflux.Message) error {
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	id := gocql.TimeUUID()
 
-	var val *float64
+	var val, valSum *float64
 	var strVal, dataVal *string
 	var boolVal *bool
 	switch msg.Values.(type) {
@@ -49,7 +49,12 @@ func (cr *cassandraRepository) Save(msg mainflux.Message) error {
 		boolVal = &v
 	}
 
+	if msg.GetValueSum() != nil {
+		v := msg.GetValueSum().GetValue()
+		valSum = &v
+	}
+
 	return cr.session.Query(cql, id, msg.GetChannel(), msg.GetPublisher(),
 		msg.GetProtocol(), msg.GetName(), msg.GetUnit(), val,
-		strVal, boolVal, dataVal, msg.GetValueSum(), msg.GetTime(), msg.GetUpdateTime(), msg.GetLink()).Exec()
+		strVal, boolVal, dataVal, valSum, msg.GetTime(), msg.GetUpdateTime(), msg.GetLink()).Exec()
 }

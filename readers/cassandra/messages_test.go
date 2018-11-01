@@ -21,7 +21,8 @@ import (
 const (
 	keyspace      = "mainflux"
 	chanID        = 1
-	numOfMessages = 42
+	numOfMessages = 10
+	valueFields   = 6
 )
 
 var (
@@ -30,6 +31,7 @@ var (
 		Channel:   chanID,
 		Publisher: 1,
 		Protocol:  "mqtt",
+		Time:      123,
 	}
 )
 
@@ -41,6 +43,23 @@ func TestReadAll(t *testing.T) {
 
 	messages := []mainflux.Message{}
 	for i := 0; i < numOfMessages; i++ {
+		count := i % valueFields
+		switch count {
+		case 0:
+			msg.Values = &mainflux.Message_Value{5}
+		case 1:
+			msg.Values = &mainflux.Message_BoolValue{false}
+		case 2:
+			msg.Values = &mainflux.Message_StringValue{"value"}
+		case 3:
+			msg.Values = &mainflux.Message_DataValue{"base64data"}
+		case 4:
+			msg.ValueSum = nil
+		case 5:
+			msg.ValueSum = &mainflux.Sum{Value: 45}
+		}
+		msg.Time++
+
 		err := writer.Save(msg)
 		require.Nil(t, err, fmt.Sprintf("failed to store message to Cassandra: %s", err))
 		messages = append(messages, msg)
@@ -48,6 +67,9 @@ func TestReadAll(t *testing.T) {
 
 	reader := readers.New(session)
 
+	// Since messages are not saved in natural order,
+	// easiest way is to take all of the save data,
+	// but in different use-cases.
 	cases := map[string]struct {
 		chanID   uint64
 		offset   uint64
@@ -58,7 +80,7 @@ func TestReadAll(t *testing.T) {
 			chanID:   chanID,
 			offset:   0,
 			limit:    10,
-			messages: messages[0:10],
+			messages: messages,
 		},
 		"read message page for non-existent channel": {
 			chanID:   2,
@@ -68,9 +90,9 @@ func TestReadAll(t *testing.T) {
 		},
 		"read message last page": {
 			chanID:   chanID,
-			offset:   40,
-			limit:    10,
-			messages: messages[40:42],
+			offset:   0,
+			limit:    15,
+			messages: messages,
 		},
 	}
 
