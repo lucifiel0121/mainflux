@@ -75,22 +75,22 @@ func parseValues(value interface{}, name string, msg *mainflux.Message) {
 	if strings.HasSuffix(name, "Value") {
 		switch value.(type) {
 		case bool:
-			msg.Values = &mainflux.Message_BoolValue{value.(bool)}
+			msg.Value = &mainflux.Message_BoolValue{value.(bool)}
 		case json.Number:
 			num, err := value.(json.Number).Float64()
 			if err != nil {
 				return
 			}
 
-			msg.Values = &mainflux.Message_Value{num}
+			msg.Value = &mainflux.Message_FloatValue{num}
 		case string:
 			if strings.HasPrefix(name, "String") {
-				msg.Values = &mainflux.Message_StringValue{value.(string)}
+				msg.Value = &mainflux.Message_StringValue{value.(string)}
 				return
 			}
 
 			if strings.HasPrefix(name, "Data") {
-				msg.Values = &mainflux.Message_DataValue{value.(string)}
+				msg.Value = &mainflux.Message_DataValue{value.(string)}
 			}
 		}
 	}

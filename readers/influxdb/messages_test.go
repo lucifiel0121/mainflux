@@ -39,7 +39,7 @@ var (
 		Protocol:   "mqtt",
 		Name:       "name",
 		Unit:       "U",
-		Values:     &mainflux.Message_Value{5},
+		Value:      &mainflux.Message_FloatValue{5},
 		ValueSum:   &mainflux.SumValue{Value: 45},
 		Time:       123456,
 		UpdateTime: 1234567,
@@ -60,13 +60,13 @@ func TestReadAll(t *testing.T) {
 		count := i % valueFields
 		switch count {
 		case 0:
-			msg.Values = &mainflux.Message_Value{5}
+			msg.Value = &mainflux.Message_FloatValue{5}
 		case 1:
-			msg.Values = &mainflux.Message_BoolValue{false}
+			msg.Value = &mainflux.Message_BoolValue{false}
 		case 2:
-			msg.Values = &mainflux.Message_StringValue{"value"}
+			msg.Value = &mainflux.Message_StringValue{"value"}
 		case 3:
-			msg.Values = &mainflux.Message_DataValue{"base64data"}
+			msg.Value = &mainflux.Message_DataValue{"base64data"}
 		case 4:
 			msg.ValueSum = nil
 		case 5:

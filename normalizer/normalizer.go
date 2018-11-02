@@ -43,19 +43,19 @@ func (n normalizer) Normalize(msg mainflux.RawMessage) (NormalizedData, error) {
 		}
 
 		if v.Value != nil {
-			m.Values = &mainflux.Message_Value{*v.Value}
+			m.Value = &mainflux.Message_FloatValue{*v.Value}
 		}
 
 		if v.BoolValue != nil {
-			m.Values = &mainflux.Message_BoolValue{*v.BoolValue}
+			m.Value = &mainflux.Message_BoolValue{*v.BoolValue}
 		}
 
 		if v.DataValue != "" {
-			m.Values = &mainflux.Message_DataValue{v.DataValue}
+			m.Value = &mainflux.Message_DataValue{v.DataValue}
 		}
 
 		if v.StringValue != "" {
-			m.Values = &mainflux.Message_StringValue{v.StringValue}
+			m.Value = &mainflux.Message_StringValue{v.StringValue}
 		}
 
 		if v.Sum != nil {

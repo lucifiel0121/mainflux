@@ -40,7 +40,7 @@ func (cr cassandraRepository) ReadAll(chanID, offset, limit uint64) []mainflux.M
 		}
 	}
 
-	var val, valueSum *float64
+	var floatVal, valueSum *float64
 	var strVal, dataVal *string
 	var boolVal *bool
 
@@ -48,23 +48,23 @@ func (cr cassandraRepository) ReadAll(chanID, offset, limit uint64) []mainflux.M
 	for scanner.Next() {
 		var msg mainflux.Message
 		scanner.Scan(&msg.Channel, &msg.Publisher, &msg.Protocol,
-			&msg.Name, &msg.Unit, &val, &strVal, &boolVal,
+			&msg.Name, &msg.Unit, &floatVal, &strVal, &boolVal,
 			&dataVal, &valueSum, &msg.Time, &msg.UpdateTime, &msg.Link)
 
-		if val != nil {
-			msg.Values = &mainflux.Message_Value{*val}
+		if floatVal != nil {
+			msg.Value = &mainflux.Message_FloatValue{*floatVal}
 		}
 
 		if strVal != nil {
-			msg.Values = &mainflux.Message_StringValue{*strVal}
+			msg.Value = &mainflux.Message_StringValue{*strVal}
 		}
 
 		if boolVal != nil {
-			msg.Values = &mainflux.Message_BoolValue{*boolVal}
+			msg.Value = &mainflux.Message_BoolValue{*boolVal}
 		}
 
 		if dataVal != nil {
-			msg.Values = &mainflux.Message_DataValue{*dataVal}
+			msg.Value = &mainflux.Message_DataValue{*dataVal}
 		}
 
 		if valueSum != nil {

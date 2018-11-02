@@ -24,8 +24,8 @@ message Message {
 	string Protocol    = 3;
 	string Name        = 4;
 	string Unit        = 5;
-	oneof values {
-		double Value       = 6;
+	oneof value {
+		double FloatValue  = 6;
 		string StringValue = 7;
 		bool   BoolValue   = 8;
 		string DataValue   = 9;

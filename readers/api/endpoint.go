@@ -38,9 +38,9 @@ func listMessagesEndpoint(svc readers.MessageRepository) endpoint.Endpoint {
 				Link:       m.Link,
 			}
 
-			switch m.Values.(type) {
-			case *mainflux.Message_Value:
-				val := m.GetValue()
+			switch m.Value.(type) {
+			case *mainflux.Message_FloatValue:
+				val := m.GetFloatValue()
 				msg.Value = &val
 			case *mainflux.Message_StringValue:
 				strVal := m.GetStringValue()

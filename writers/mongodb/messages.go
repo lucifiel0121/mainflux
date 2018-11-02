@@ -59,19 +59,19 @@ func (repo *mongoRepo) Save(msg mainflux.Message) error {
 		Link:       msg.Link,
 	}
 
-	switch msg.Values.(type) {
-	case *mainflux.Message_Value:
-		val := msg.GetValue()
-		m.Value = &val
+	switch msg.Value.(type) {
+	case *mainflux.Message_FloatValue:
+		v := msg.GetFloatValue()
+		m.Value = &v
 	case *mainflux.Message_StringValue:
-		strVal := msg.GetStringValue()
-		m.StringValue = &strVal
+		v := msg.GetStringValue()
+		m.StringValue = &v
 	case *mainflux.Message_DataValue:
-		dataVal := msg.GetDataValue()
-		m.DataValue = &dataVal
+		v := msg.GetDataValue()
+		m.DataValue = &v
 	case *mainflux.Message_BoolValue:
-		boolVal := msg.GetBoolValue()
-		m.BoolValue = &boolVal
+		v := msg.GetBoolValue()
+		m.BoolValue = &v
 	}
 
 	if msg.GetValueSum() != nil {

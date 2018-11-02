@@ -42,13 +42,13 @@ func newService() readers.MessageRepository {
 		count := i % valueFields
 		switch count {
 		case 0:
-			msg.Values = &mainflux.Message_Value{5}
+			msg.Value = &mainflux.Message_FloatValue{5}
 		case 1:
-			msg.Values = &mainflux.Message_BoolValue{false}
+			msg.Value = &mainflux.Message_BoolValue{false}
 		case 2:
-			msg.Values = &mainflux.Message_StringValue{"value"}
+			msg.Value = &mainflux.Message_StringValue{"value"}
 		case 3:
-			msg.Values = &mainflux.Message_DataValue{"base64data"}
+			msg.Value = &mainflux.Message_DataValue{"base64data"}
 		case 4:
 			msg.ValueSum = nil
 		case 5:

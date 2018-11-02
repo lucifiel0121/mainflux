@@ -140,9 +140,9 @@ func (repo *influxRepo) tagsOf(msg *mainflux.Message) tags {
 
 func (repo *influxRepo) fieldsOf(msg *mainflux.Message) fields {
 	ret := fields{}
-	switch msg.Values.(type) {
-	case *mainflux.Message_Value:
-		ret["Value"] = msg.GetValue()
+	switch msg.Value.(type) {
+	case *mainflux.Message_FloatValue:
+		ret["Value"] = msg.GetFloatValue()
 	case *mainflux.Message_StringValue:
 		ret["StringValue"] = msg.GetStringValue()
 	case *mainflux.Message_DataValue:
