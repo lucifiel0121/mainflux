@@ -31,7 +31,6 @@ var (
 		Channel:   chanID,
 		Publisher: 1,
 		Protocol:  "mqtt",
-		Time:      123,
 	}
 )
 
@@ -43,6 +42,7 @@ func TestReadAll(t *testing.T) {
 
 	messages := []mainflux.Message{}
 	for i := 0; i < numOfMessages; i++ {
+		// Mix possible values as well as value sum.
 		count := i % valueFields
 		switch count {
 		case 0:
@@ -58,7 +58,6 @@ func TestReadAll(t *testing.T) {
 		case 5:
 			msg.ValueSum = &mainflux.Sum{Value: 45}
 		}
-		msg.Time++
 
 		err := writer.Save(msg)
 		require.Nil(t, err, fmt.Sprintf("failed to store message to Cassandra: %s", err))
@@ -68,8 +67,8 @@ func TestReadAll(t *testing.T) {
 	reader := readers.New(session)
 
 	// Since messages are not saved in natural order,
-	// easiest way is to take all of the save data,
-	// but in different use-cases.
+	// the easiest way is to take all of the saved
+	// data, but in different use-cases.
 	cases := map[string]struct {
 		chanID   uint64
 		offset   uint64
