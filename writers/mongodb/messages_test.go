@@ -30,7 +30,7 @@ var (
 	testDB      = "test"
 	collection  = "mainflux"
 	db          mongo.Database
-	numMessages = 100
+	msgsNum     = 100
 	valueFields = 6
 )
 
@@ -53,8 +53,8 @@ func TestSave(t *testing.T) {
 
 	db := client.Database(testDB)
 	repo := mongodb.New(db)
-	// Mix possible values as well as value sum.
-	for i := 0; i < numMessages; i++ {
+	for i := 0; i < msgsNum; i++ {
+		// Mix possible values as well as value sum.
 		count := i % valueFields
 		switch count {
 		case 0:
@@ -70,11 +70,12 @@ func TestSave(t *testing.T) {
 		case 5:
 			msg.ValueSum = &mainflux.Sum{Value: 45}
 		}
+
 		err = repo.Save(msg)
 	}
 	assert.Nil(t, err, fmt.Sprintf("Save operation expected to succeed: %s.\n", err))
 
 	count, err := db.Collection(collection).Count(context.Background(), nil)
 	assert.Nil(t, err, fmt.Sprintf("Querying database expected to succeed: %s.\n", err))
-	assert.Equal(t, int64(numMessages), count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", numMessages, count))
+	assert.Equal(t, int64(msgsNum), count, fmt.Sprintf("Expected to have %d value, found %d instead.\n", msgsNum, count))
 }

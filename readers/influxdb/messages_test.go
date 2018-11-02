@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	testDB        = "test"
-	chanID        = 1
-	numOfMessages = 101
-	valueFields   = 6
+	testDB      = "test"
+	chanID      = 1
+	msgsNum     = 101
+	valueFields = 6
 )
 
 var (
@@ -55,7 +55,7 @@ func TestReadAll(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Creating new InfluxDB writer expected to succeed: %s.\n", err))
 
 	messages := []mainflux.Message{}
-	for i := 0; i < numOfMessages; i++ {
+	for i := 0; i < msgsNum; i++ {
 		// Mix possible values as well as value sum.
 		count := i % valueFields
 		switch count {

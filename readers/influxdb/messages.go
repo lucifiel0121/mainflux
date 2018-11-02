@@ -59,7 +59,7 @@ func (repo *influxRepository) ReadAll(chanID, offset, limit uint64) []mainflux.M
 }
 
 // ParseMessage and parseValues are util methods. Since InfluxDB client returns
-// results in some proprietary form, this obscure message conversion is needed
+// results in form of rows and columns, this obscure message conversion is needed
 // to return actual []mainflux.Message from the query result.
 func parseValues(value interface{}, name string, msg *mainflux.Message) {
 	if name == "ValueSum" && value != nil {
@@ -81,12 +81,14 @@ func parseValues(value interface{}, name string, msg *mainflux.Message) {
 			if err != nil {
 				return
 			}
+
 			msg.Values = &mainflux.Message_Value{num}
 		case string:
 			if strings.HasPrefix(name, "String") {
 				msg.Values = &mainflux.Message_StringValue{value.(string)}
 				return
 			}
+
 			if strings.HasPrefix(name, "Data") {
 				msg.Values = &mainflux.Message_DataValue{value.(string)}
 			}

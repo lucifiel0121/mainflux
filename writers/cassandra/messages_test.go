@@ -26,7 +26,7 @@ var (
 		Publisher: 1,
 		Protocol:  "mqtt",
 	}
-	msgNum      = 42
+	msgsNum     = 42
 	valueFields = 6
 )
 
@@ -35,7 +35,8 @@ func TestSave(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("failed to connect to Cassandra: %s", err))
 
 	repo := cassandra.New(session)
-	for i := 0; i < msgNum; i++ {
+	for i := 0; i < msgsNum; i++ {
+		// Mix possible values as well as value sum.
 		count := i % valueFields
 		switch count {
 		case 0:

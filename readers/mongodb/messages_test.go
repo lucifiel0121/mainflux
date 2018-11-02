@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	testDB        = "test"
-	collection    = "mainflux"
-	chanID        = 1
-	numOfMessages = 42
-	valueFields   = 6
+	testDB      = "test"
+	collection  = "mainflux"
+	chanID      = 1
+	msgsNum     = 42
+	valueFields = 6
 )
 
 var (
@@ -52,7 +52,7 @@ func TestReadAll(t *testing.T) {
 	writer := writers.New(db)
 
 	messages := []mainflux.Message{}
-	for i := 0; i < numOfMessages; i++ {
+	for i := 0; i < msgsNum; i++ {
 		// Mix possible values as well as value sum.
 		count := i % valueFields
 		switch count {

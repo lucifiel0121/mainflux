@@ -120,21 +120,21 @@ func TestSave(t *testing.T) {
 	cases := []struct {
 		desc         string
 		repo         writers.MessageRepository
-		numOfMsg     int
+		msgsNum      int
 		expectedSize int
 		isBatch      bool
 	}{
 		{
 			desc:         "save a single message",
 			repo:         repo,
-			numOfMsg:     1,
+			msgsNum:      1,
 			expectedSize: 1,
 			isBatch:      false,
 		},
 		{
 			desc:         "save a batch of messages",
 			repo:         repo1,
-			numOfMsg:     streamsSize,
+			msgsNum:      streamsSize,
 			expectedSize: streamsSize - (streamsSize % saveBatchSize),
 			isBatch:      true,
 		},
@@ -145,8 +145,8 @@ func TestSave(t *testing.T) {
 		row, err := queryDB(dropMsgs)
 		require.Nil(t, err, fmt.Sprintf("Cleaning data from InfluxDB expected to succeed: %s.\n", err))
 
-		// Mix possible values as well as value sum.
-		for i := 0; i < tc.numOfMsg; i++ {
+		for i := 0; i < tc.msgsNum; i++ {
+			// Mix possible values as well as value sum.
 			count := i % valueFields
 			switch count {
 			case 0:
@@ -162,6 +162,7 @@ func TestSave(t *testing.T) {
 			case 5:
 				msg.ValueSum = &mainflux.Sum{Value: 45}
 			}
+
 			err := tc.repo.Save(msg)
 			assert.Nil(t, err, fmt.Sprintf("Save operation expected to succeed: %s.\n", err))
 		}
@@ -179,7 +180,7 @@ func TestSave(t *testing.T) {
 			row, err = queryDB(selectMsgs)
 			assert.Nil(t, err, fmt.Sprintf("Querying InfluxDB to retrieve data count expected to succeed: %s.\n", err))
 			count = len(row)
-			assert.Equal(t, tc.numOfMsg, count, fmt.Sprintf("Expected to have %d messages, found %d instead.\n", tc.numOfMsg, count))
+			assert.Equal(t, tc.msgsNum, count, fmt.Sprintf("Expected to have %d messages, found %d instead.\n", tc.msgsNum, count))
 		}
 	}
 }

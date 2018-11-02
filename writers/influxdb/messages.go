@@ -69,7 +69,7 @@ func New(client influxdata.Client, database string, batchSize int, batchTimeout 
 	go func() {
 		for {
 			<-repo.tick
-			// Nil point indicates that save method is triggered by the ticker.
+			// Nil point indicates that savePoint method is triggered by the ticker.
 			repo.savePoint(nil)
 		}
 	}()
@@ -94,13 +94,13 @@ func (repo *influxRepo) savePoint(point *influxdata.Point) error {
 	}
 
 	if len(repo.batch.Points())%repo.batchSize == 0 || point == nil {
-		var err error
-		if err = repo.client.Write(repo.batch); err != nil {
+		if err := repo.client.Write(repo.batch); err != nil {
 			return err
 		}
 		// It would be nice to reset ticker at this point, which
 		// implies creating a new ticker and goroutine. It would
 		// introduce unnecessary complexity with no justified benefits.
+		var err error
 		repo.batch, err = influxdata.NewBatchPoints(repo.cfg)
 		if err != nil {
 			return err

@@ -58,6 +58,7 @@ func (repo *mongoRepo) Save(msg mainflux.Message) error {
 		UpdateTime: msg.UpdateTime,
 		Link:       msg.Link,
 	}
+
 	switch msg.Values.(type) {
 	case *mainflux.Message_Value:
 		val := msg.GetValue()
@@ -72,6 +73,7 @@ func (repo *mongoRepo) Save(msg mainflux.Message) error {
 		boolVal := msg.GetBoolValue()
 		m.BoolValue = &boolVal
 	}
+
 	if msg.GetValueSum() != nil {
 		valueSum := msg.GetValueSum().Value
 		m.ValueSum = &valueSum

@@ -19,10 +19,10 @@ import (
 )
 
 const (
-	keyspace      = "mainflux"
-	chanID        = 1
-	numOfMessages = 10
-	valueFields   = 6
+	keyspace    = "mainflux"
+	chanID      = 1
+	msgsNum     = 10
+	valueFields = 6
 )
 
 var (
@@ -41,7 +41,7 @@ func TestReadAll(t *testing.T) {
 	writer := writers.New(session)
 
 	messages := []mainflux.Message{}
-	for i := 0; i < numOfMessages; i++ {
+	for i := 0; i < msgsNum; i++ {
 		// Mix possible values as well as value sum.
 		count := i % valueFields
 		switch count {

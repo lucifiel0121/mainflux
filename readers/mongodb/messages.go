@@ -76,15 +76,19 @@ func (repo mongoRepository) ReadAll(chanID, offset, limit uint64) []mainflux.Mes
 		if m.Value != nil {
 			msg.Values = &mainflux.Message_Value{*m.Value}
 		}
+
 		if m.StringValue != nil {
 			msg.Values = &mainflux.Message_StringValue{*m.StringValue}
 		}
+
 		if m.DataValue != nil {
 			msg.Values = &mainflux.Message_DataValue{*m.DataValue}
 		}
+
 		if m.BoolValue != nil {
 			msg.Values = &mainflux.Message_BoolValue{*m.BoolValue}
 		}
+
 		if m.ValueSum != nil {
 			msg.ValueSum = &mainflux.Sum{Value: *m.ValueSum}
 		}
