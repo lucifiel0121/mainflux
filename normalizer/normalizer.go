@@ -59,7 +59,7 @@ func (n normalizer) Normalize(msg mainflux.RawMessage) (NormalizedData, error) {
 		}
 
 		if v.Sum != nil {
-			m.ValueSum = &mainflux.Sum{Value: *v.Sum}
+			m.ValueSum = &mainflux.SumValue{Value: *v.Sum}
 		}
 
 		msgs[k] = m

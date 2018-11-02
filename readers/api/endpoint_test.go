@@ -52,7 +52,7 @@ func newService() readers.MessageRepository {
 		case 4:
 			msg.ValueSum = nil
 		case 5:
-			msg.ValueSum = &mainflux.Sum{Value: 45}
+			msg.ValueSum = &mainflux.SumValue{Value: 45}
 		}
 		messages = append(messages, msg)
 	}

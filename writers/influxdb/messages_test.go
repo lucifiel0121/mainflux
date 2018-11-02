@@ -46,7 +46,7 @@ var (
 		Name:       "test name",
 		Unit:       "km",
 		Values:     &mainflux.Message_Value{Value: 24},
-		ValueSum:   &mainflux.Sum{Value: 22},
+		ValueSum:   &mainflux.SumValue{Value: 22},
 		Time:       13451312,
 		UpdateTime: 5456565466,
 		Link:       "link",
@@ -160,7 +160,7 @@ func TestSave(t *testing.T) {
 			case 4:
 				msg.ValueSum = nil
 			case 5:
-				msg.ValueSum = &mainflux.Sum{Value: 45}
+				msg.ValueSum = &mainflux.SumValue{Value: 45}
 			}
 
 			err := tc.repo.Save(msg)

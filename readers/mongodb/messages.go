@@ -90,7 +90,7 @@ func (repo mongoRepository) ReadAll(chanID, offset, limit uint64) []mainflux.Mes
 		}
 
 		if m.ValueSum != nil {
-			msg.ValueSum = &mainflux.Sum{Value: *m.ValueSum}
+			msg.ValueSum = &mainflux.SumValue{Value: *m.ValueSum}
 		}
 
 		messages = append(messages, msg)

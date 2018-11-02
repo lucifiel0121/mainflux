@@ -68,7 +68,7 @@ func parseValues(value interface{}, name string, msg *mainflux.Message) {
 			if err != nil {
 				return
 			}
-			msg.ValueSum = &mainflux.Sum{Value: valSum}
+			msg.ValueSum = &mainflux.SumValue{Value: valSum}
 		}
 		return
 	}

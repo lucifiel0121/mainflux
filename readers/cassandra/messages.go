@@ -68,7 +68,7 @@ func (cr cassandraRepository) ReadAll(chanID, offset, limit uint64) []mainflux.M
 		}
 
 		if valueSum != nil {
-			msg.ValueSum = &mainflux.Sum{Value: *valueSum}
+			msg.ValueSum = &mainflux.SumValue{Value: *valueSum}
 		}
 
 		page = append(page, msg)
