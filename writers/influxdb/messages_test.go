@@ -45,7 +45,7 @@ var (
 		Protocol:   "http",
 		Name:       "test name",
 		Unit:       "km",
-		Value:      &mainflux.Message_FloatValue{Value: 24},
+		Value:      &mainflux.Message_FloatValue{24},
 		ValueSum:   &mainflux.SumValue{Value: 22},
 		Time:       13451312,
 		UpdateTime: 5456565466,

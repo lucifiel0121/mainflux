@@ -34,6 +34,7 @@ func (repo *influxRepository) ReadAll(chanID, offset, limit uint64) []mainflux.M
 	if limit > maxLimit {
 		limit = maxLimit
 	}
+
 	cmd := fmt.Sprintf(`SELECT * from messages WHERE Channel='%d' LIMIT %d OFFSET %d`, chanID, limit, offset)
 	q := influxdata.Query{
 		Command:  cmd,
