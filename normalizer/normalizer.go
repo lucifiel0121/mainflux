@@ -42,19 +42,14 @@ func (n normalizer) Normalize(msg mainflux.RawMessage) (NormalizedData, error) {
 			Link:       v.Link,
 		}
 
-		if v.Value != nil {
+		switch {
+		case v.Value != nil:
 			m.Value = &mainflux.Message_FloatValue{*v.Value}
-		}
-
-		if v.BoolValue != nil {
+		case v.BoolValue != nil:
 			m.Value = &mainflux.Message_BoolValue{*v.BoolValue}
-		}
-
-		if v.DataValue != "" {
+		case v.DataValue != "":
 			m.Value = &mainflux.Message_DataValue{v.DataValue}
-		}
-
-		if v.StringValue != "" {
+		case v.StringValue != "":
 			m.Value = &mainflux.Message_StringValue{v.StringValue}
 		}
 

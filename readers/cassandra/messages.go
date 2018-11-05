@@ -51,19 +51,14 @@ func (cr cassandraRepository) ReadAll(chanID, offset, limit uint64) []mainflux.M
 			&msg.Name, &msg.Unit, &floatVal, &strVal, &boolVal,
 			&dataVal, &valueSum, &msg.Time, &msg.UpdateTime, &msg.Link)
 
-		if floatVal != nil {
+		switch {
+		case floatVal != nil:
 			msg.Value = &mainflux.Message_FloatValue{*floatVal}
-		}
-
-		if strVal != nil {
+		case strVal != nil:
 			msg.Value = &mainflux.Message_StringValue{*strVal}
-		}
-
-		if boolVal != nil {
+		case boolVal != nil:
 			msg.Value = &mainflux.Message_BoolValue{*boolVal}
-		}
-
-		if dataVal != nil {
+		case dataVal != nil:
 			msg.Value = &mainflux.Message_DataValue{*dataVal}
 		}
 

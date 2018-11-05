@@ -31,7 +31,7 @@ type message struct {
 	Protocol    string   `bson:"protocol,omitempty"`
 	Name        string   `bson:"name,omitempty"`
 	Unit        string   `bson:"unit,omitempty"`
-	Value       *float64 `bson:"value,omitempty"`
+	FloatValue  *float64 `bson:"value,omitempty"`
 	StringValue *string  `bson:"stringValue,omitempty"`
 	BoolValue   *bool    `bson:"boolValue,omitempty"`
 	DataValue   *string  `bson:"dataValue,omitempty"`
@@ -62,7 +62,7 @@ func (repo *mongoRepo) Save(msg mainflux.Message) error {
 	switch msg.Value.(type) {
 	case *mainflux.Message_FloatValue:
 		v := msg.GetFloatValue()
-		m.Value = &v
+		m.FloatValue = &v
 	case *mainflux.Message_StringValue:
 		v := msg.GetStringValue()
 		m.StringValue = &v

@@ -32,7 +32,7 @@ type message struct {
 	Protocol    string   `bson:"protocol,omitempty"`
 	Name        string   `bson:"name,omitempty"`
 	Unit        string   `bson:"unit,omitempty"`
-	Value       *float64 `bson:"value,omitempty"`
+	FloatValue  *float64 `bson:"value,omitempty"`
 	StringValue *string  `bson:"stringValue,omitempty"`
 	BoolValue   *bool    `bson:"boolValue,omitempty"`
 	DataValue   *string  `bson:"dataValue,omitempty"`
@@ -73,19 +73,14 @@ func (repo mongoRepository) ReadAll(chanID, offset, limit uint64) []mainflux.Mes
 			Link:       m.Link,
 		}
 
-		if m.Value != nil {
-			msg.Value = &mainflux.Message_FloatValue{*m.Value}
-		}
-
-		if m.StringValue != nil {
+		switch {
+		case m.FloatValue != nil:
+			msg.Value = &mainflux.Message_FloatValue{*m.FloatValue}
+		case m.StringValue != nil:
 			msg.Value = &mainflux.Message_StringValue{*m.StringValue}
-		}
-
-		if m.DataValue != nil {
+		case m.DataValue != nil:
 			msg.Value = &mainflux.Message_DataValue{*m.DataValue}
-		}
-
-		if m.BoolValue != nil {
+		case m.BoolValue != nil:
 			msg.Value = &mainflux.Message_BoolValue{*m.BoolValue}
 		}
 
