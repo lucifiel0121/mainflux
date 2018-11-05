@@ -21,7 +21,7 @@ import (
 const (
 	keyspace    = "mainflux"
 	chanID      = 1
-	msgsNum     = 10
+	msgsNum     = 42
 	valueFields = 6
 )
 
@@ -67,8 +67,8 @@ func TestReadAll(t *testing.T) {
 	reader := readers.New(session)
 
 	// Since messages are not saved in natural order,
-	// the easiest way is to take all of the saved
-	// data, but in different use-cases.
+	// cases that return subset of messages are only
+	// checking data result set size, but not content.
 	cases := map[string]struct {
 		chanID   uint64
 		offset   uint64
@@ -78,25 +78,29 @@ func TestReadAll(t *testing.T) {
 		"read message page for existing channel": {
 			chanID:   chanID,
 			offset:   0,
-			limit:    10,
+			limit:    msgsNum,
 			messages: messages,
 		},
 		"read message page for non-existent channel": {
 			chanID:   2,
 			offset:   0,
-			limit:    10,
+			limit:    msgsNum,
 			messages: []mainflux.Message{},
 		},
 		"read message last page": {
 			chanID:   chanID,
-			offset:   0,
-			limit:    15,
-			messages: messages,
+			offset:   40,
+			limit:    5,
+			messages: messages[40:42],
 		},
 	}
 
 	for desc, tc := range cases {
 		result := reader.ReadAll(tc.chanID, tc.offset, tc.limit)
+		if tc.offset > 0 {
+			assert.Equal(t, len(tc.messages), len(result), fmt.Sprintf("%s: expected %d messages, got %d", desc, len(tc.messages), len(result)))
+			continue
+		}
 		assert.ElementsMatch(t, tc.messages, result, fmt.Sprintf("%s: expected %v got %v", desc, tc.messages, result))
 	}
 }

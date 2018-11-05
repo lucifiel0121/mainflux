@@ -54,6 +54,6 @@ func TestSave(t *testing.T) {
 		}
 
 		err = repo.Save(msg)
-		assert.Nil(t, err, fmt.Sprintf("expected no error, go %s", err))
+		assert.Nil(t, err, fmt.Sprintf("expected no error, got %s", err))
 	}
 }
