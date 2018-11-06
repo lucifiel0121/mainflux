@@ -3,8 +3,8 @@
   version = "9.0.0"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/cisco/senml"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/dgrijalva/jwt-go"
@@ -27,8 +27,8 @@
   version = "1.2.0"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/lib/pq"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/nats-io/go-nats"
@@ -55,8 +55,8 @@
   version = "1.2.2"
 
 [[constraint]]
-  branch = "master"
   name = "golang.org/x/crypto"
+  branch = "master"
 
 [[constraint]]
   name = "gopkg.in/ory-am/dockertest.v3"
@@ -67,8 +67,8 @@
   version = "1.4.0"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/rubenv/sql-migrate"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/influxdata/influxdb"
@@ -79,16 +79,16 @@
   version = "0.0.5"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/gocql/gocql"
+  branch = "master"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/dereulenspiegel/coap-mux"
+  branch = "master"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/dustin/go-coap"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/gogo/protobuf"
