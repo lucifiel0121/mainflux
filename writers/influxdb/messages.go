@@ -9,6 +9,7 @@ package influxdb
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -27,6 +28,9 @@ var (
 	errZeroValueSize    = errors.New("zero value batch size")
 	errZeroValueTimeout = errors.New("zero value batch timeout")
 	errNilBatch         = errors.New("nil batch")
+	// According to SenML specification (https://tools.ietf.org/html/rfc8428#page-10), time greater than or
+	// equal to timeBound is absolute, and values less than timeBound are relative to the current time.
+	timeBound = math.Pow(2, 28)
 )
 
 type influxRepo struct {
@@ -112,7 +116,14 @@ func (repo *influxRepo) savePoint(point *influxdata.Point) error {
 
 func (repo *influxRepo) Save(msg mainflux.Message) error {
 	tags, fields := repo.tagsOf(&msg), repo.fieldsOf(&msg)
-	pt, err := influxdata.NewPoint(pointName, tags, fields, time.Now())
+	timestamp := int64(msg.Time)
+	// Time less than timeBound is relative to the current time.
+	if msg.Time < timeBound {
+		timestamp += time.Now().Unix()
+	}
+	t := time.Unix(timestamp, 0)
+
+	pt, err := influxdata.NewPoint(pointName, tags, fields, t)
 	if err != nil {
 		return err
 	}
@@ -121,8 +132,7 @@ func (repo *influxRepo) Save(msg mainflux.Message) error {
 }
 
 func (repo *influxRepo) tagsOf(msg *mainflux.Message) tags {
-	time := strconv.FormatFloat(msg.Time, 'f', -1, 64)
-	update := strconv.FormatFloat(msg.UpdateTime, 'f', -1, 64)
+	updateTime := strconv.FormatFloat(msg.UpdateTime, 'f', -1, 64)
 	channel := strconv.FormatUint(msg.Channel, 10)
 	publisher := strconv.FormatUint(msg.Publisher, 10)
 
@@ -133,8 +143,7 @@ func (repo *influxRepo) tagsOf(msg *mainflux.Message) tags {
 		"Name":       msg.Name,
 		"Unit":       msg.Unit,
 		"Link":       msg.Link,
-		"Time":       time,
-		"UpdateTime": update,
+		"UpdateTime": updateTime,
 	}
 }
 
