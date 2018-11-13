@@ -42,7 +42,7 @@ var (
 		Value:      &mainflux.Message_FloatValue{5},
 		ValueSum:   &mainflux.SumValue{Value: 45},
 		Time:       123456,
-		UpdateTime: 1234567,
+		UpdateTime: 1234,
 		Link:       "link",
 	}
 )
@@ -55,6 +55,7 @@ func TestReadAll(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Creating new InfluxDB writer expected to succeed: %s.\n", err))
 
 	messages := []mainflux.Message{}
+	now := time.Now().Unix()
 	for i := 0; i < msgsNum; i++ {
 		// Mix possible values as well as value sum.
 		count := i % valueFields
@@ -72,6 +73,7 @@ func TestReadAll(t *testing.T) {
 		case 5:
 			msg.ValueSum = &mainflux.SumValue{Value: 45}
 		}
+		msg.Time = float64(now + int64(i))
 
 		err := writer.Save(msg)
 		require.Nil(t, err, fmt.Sprintf("failed to store message to InfluxDB: %s", err))
@@ -90,8 +92,8 @@ func TestReadAll(t *testing.T) {
 		"read message page for existing channel": {
 			chanID:   chanID,
 			offset:   0,
-			limit:    10,
-			messages: messages[0:10],
+			limit:    1,
+			messages: messages[0:1],
 		},
 		"read message page for too large limit": {
 			chanID:   chanID,
@@ -115,6 +117,6 @@ func TestReadAll(t *testing.T) {
 
 	for desc, tc := range cases {
 		result := reader.ReadAll(tc.chanID, tc.offset, tc.limit)
-		assert.ElementsMatch(t, tc.messages, result, fmt.Sprintf("%s: expected %v got %v", desc, tc.messages, result))
+		assert.ElementsMatch(t, tc.messages, result, fmt.Sprintf("%s: expected: %v \n-------------\n got: %v", desc, tc.messages, result))
 	}
 }

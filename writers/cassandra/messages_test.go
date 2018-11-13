@@ -10,6 +10,7 @@ package cassandra_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/writers/cassandra"
@@ -34,6 +35,7 @@ func TestSave(t *testing.T) {
 	session, err := cassandra.Connect([]string{addr}, keyspace)
 	require.Nil(t, err, fmt.Sprintf("failed to connect to Cassandra: %s", err))
 
+	now := time.Now().Unix()
 	repo := cassandra.New(session)
 	for i := 0; i < msgsNum; i++ {
 		// Mix possible values as well as value sum.
@@ -52,6 +54,7 @@ func TestSave(t *testing.T) {
 		case 5:
 			msg.ValueSum = &mainflux.SumValue{Value: 45}
 		}
+		msg.Time = float64(now + int64(i))
 
 		err = repo.Save(msg)
 		assert.Nil(t, err, fmt.Sprintf("expected no error, got %s", err))

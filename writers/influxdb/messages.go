@@ -137,13 +137,13 @@ func (repo *influxRepo) tagsOf(msg *mainflux.Message) tags {
 	publisher := strconv.FormatUint(msg.Publisher, 10)
 
 	return tags{
-		"Channel":    channel,
-		"Publisher":  publisher,
-		"Protocol":   msg.Protocol,
-		"Name":       msg.Name,
-		"Unit":       msg.Unit,
-		"Link":       msg.Link,
-		"UpdateTime": updateTime,
+		"channel":    channel,
+		"publisher":  publisher,
+		"protocol":   msg.Protocol,
+		"name":       msg.Name,
+		"unit":       msg.Unit,
+		"link":       msg.Link,
+		"updateTime": updateTime,
 	}
 }
 
@@ -151,17 +151,17 @@ func (repo *influxRepo) fieldsOf(msg *mainflux.Message) fields {
 	ret := fields{}
 	switch msg.Value.(type) {
 	case *mainflux.Message_FloatValue:
-		ret["Value"] = msg.GetFloatValue()
+		ret["value"] = msg.GetFloatValue()
 	case *mainflux.Message_StringValue:
-		ret["StringValue"] = msg.GetStringValue()
+		ret["stringValue"] = msg.GetStringValue()
 	case *mainflux.Message_DataValue:
-		ret["DataValue"] = msg.GetDataValue()
+		ret["dataValue"] = msg.GetDataValue()
 	case *mainflux.Message_BoolValue:
-		ret["BoolValue"] = msg.GetBoolValue()
+		ret["boolValue"] = msg.GetBoolValue()
 	}
 
 	if msg.ValueSum != nil {
-		ret["ValueSum"] = msg.GetValueSum().GetValue()
+		ret["valueSum"] = msg.GetValueSum().GetValue()
 	}
 
 	return ret
