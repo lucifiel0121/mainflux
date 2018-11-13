@@ -35,8 +35,8 @@ func TestSave(t *testing.T) {
 	session, err := cassandra.Connect([]string{addr}, keyspace)
 	require.Nil(t, err, fmt.Sprintf("failed to connect to Cassandra: %s", err))
 
-	now := time.Now().Unix()
 	repo := cassandra.New(session)
+	now := time.Now().Unix()
 	for i := 0; i < msgsNum; i++ {
 		// Mix possible values as well as value sum.
 		count := i % valueFields

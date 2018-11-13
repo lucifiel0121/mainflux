@@ -92,8 +92,8 @@ func TestReadAll(t *testing.T) {
 		"read message page for existing channel": {
 			chanID:   chanID,
 			offset:   0,
-			limit:    1,
-			messages: messages[0:1],
+			limit:    10,
+			messages: messages[0:10],
 		},
 		"read message page for too large limit": {
 			chanID:   chanID,

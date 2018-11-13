@@ -68,10 +68,12 @@ func parseValues(value interface{}, name string, msg *mainflux.Message) {
 			if err != nil {
 				return
 			}
+
 			msg.ValueSum = &mainflux.SumValue{Value: valSum}
 		}
 		return
 	}
+
 	if strings.HasSuffix(strings.ToLower(name), "value") {
 		switch value.(type) {
 		case bool:
@@ -81,12 +83,14 @@ func parseValues(value interface{}, name string, msg *mainflux.Message) {
 			if err != nil {
 				return
 			}
+
 			msg.Value = &mainflux.Message_FloatValue{num}
 		case string:
 			if strings.HasPrefix(name, "string") {
 				msg.Value = &mainflux.Message_StringValue{value.(string)}
 				return
 			}
+
 			if strings.HasPrefix(name, "data") {
 				msg.Value = &mainflux.Message_DataValue{value.(string)}
 			}
@@ -119,10 +123,12 @@ func parseMessage(names []string, fields []interface{}) mainflux.Message {
 				if err != nil {
 					continue
 				}
+
 				v := float64(t.Unix())
 				msgField.SetFloat(v)
 				continue
 			}
+
 			val, _ := strconv.ParseFloat(fields[i].(string), 64)
 			msgField.SetFloat(val)
 		}
