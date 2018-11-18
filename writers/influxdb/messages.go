@@ -123,23 +123,25 @@ func (repo *influxRepo) Save(msg mainflux.Message) error {
 }
 
 func (repo *influxRepo) tagsOf(msg *mainflux.Message) tags {
-	updateTime := strconv.FormatFloat(msg.UpdateTime, 'f', -1, 64)
 	channel := strconv.FormatUint(msg.Channel, 10)
 	publisher := strconv.FormatUint(msg.Publisher, 10)
 
 	return tags{
-		"channel":    channel,
-		"publisher":  publisher,
+		"channel":   channel,
+		"publisher": publisher,
+	}
+}
+
+func (repo *influxRepo) fieldsOf(msg *mainflux.Message) fields {
+	updateTime := strconv.FormatFloat(msg.UpdateTime, 'f', -1, 64)
+	ret := fields{
 		"protocol":   msg.Protocol,
 		"name":       msg.Name,
 		"unit":       msg.Unit,
 		"link":       msg.Link,
 		"updateTime": updateTime,
 	}
-}
 
-func (repo *influxRepo) fieldsOf(msg *mainflux.Message) fields {
-	ret := fields{}
 	switch msg.Value.(type) {
 	case *mainflux.Message_FloatValue:
 		ret["value"] = msg.GetFloatValue()
