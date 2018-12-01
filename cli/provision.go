@@ -51,7 +51,11 @@ var cmdProvision = []cobra.Command{
 				return
 			}
 
-			c, _ := os.Open(args[0])
+			c, err := os.Open(args[0])
+			if err != nil {
+				logError(err)
+				return
+			}
 			reader := csv.NewReader(bufio.NewReader(c))
 			for {
 				l, err := reader.Read()
@@ -101,7 +105,11 @@ var cmdProvision = []cobra.Command{
 				return
 			}
 
-			c, _ := os.Open(args[0])
+			c, err := os.Open(args[0])
+			if err != nil {
+				logError(err)
+				return
+			}
 			reader := csv.NewReader(bufio.NewReader(c))
 			for {
 				l, err := reader.Read()
