@@ -98,16 +98,21 @@ var cmdProvision = []cobra.Command{
 				return
 			}
 			reader := csv.NewReader(bufio.NewReader(c))
+
+		LoopThingCSV:
 			for {
 				l, err := reader.Read()
-				if err == io.EOF {
+				switch err {
+				case nil:
 					break
-				} else if err != nil {
+				case io.EOF:
+					break LoopThingCSV
+				default:
 					logError(err)
 					return
 				}
 
-				m, err := createThing(l[0], l[1], args[2])
+				m, err := createThing(l[0], l[1], args[1])
 				if err != nil {
 					logError(err)
 					return
@@ -137,11 +142,16 @@ var cmdProvision = []cobra.Command{
 				return
 			}
 			reader := csv.NewReader(bufio.NewReader(c))
+
+		LoopChanCSV:
 			for {
 				l, err := reader.Read()
-				if err == io.EOF {
+				switch err {
+				case nil:
 					break
-				} else if err != nil {
+				case io.EOF:
+					break LoopChanCSV
+				default:
 					logError(err)
 					return
 				}

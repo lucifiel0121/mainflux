@@ -13,8 +13,8 @@
 [[projects]]
   name = "github.com/Microsoft/go-winio"
   packages = ["."]
-  revision = "7da180ee92d8bd8bb8c37fc560e673e6557c392f"
-  version = "v0.4.7"
+  revision = "97e4973ce50b2ff5f09635a57e2b88a037aae829"
+  version = "v0.4.11"
 
 [[projects]]
   branch = "master"
@@ -35,16 +35,10 @@
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/buger/jsonparser"
-  packages = ["."]
-  revision = "2cac668e8456b4284edb0715e17e2af02d3ec993"
-
-[[projects]]
   name = "github.com/cenkalti/backoff"
   packages = ["."]
-  revision = "2ea60e5f094469f9e65adb9cd103795b73ae743e"
-  version = "v2.0.0"
+  revision = "62661b46c4093e2c1f38d943e663db1a29873e80"
+  version = "v2.1.0"
 
 [[projects]]
   branch = "master"
@@ -56,13 +50,13 @@
   branch = "master"
   name = "github.com/containerd/continuity"
   packages = ["pathdriver"]
-  revision = "c6cef34830231743494fe2969284df7b82cc0ad0"
+  revision = "004b46473808b3e7a4a3049c20e4376c91eb966d"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
-  revision = "346938d642f2ec3594ed81d874461961cd0faa76"
-  version = "v1.1.0"
+  revision = "8991bc29aa16c548c550c7ff78260e27b9ab7c73"
+  version = "v1.1.1"
 
 [[projects]]
   branch = "master"
@@ -104,18 +98,15 @@
   revision = "ddcc80675fa42611359d91a6dfa5aa57fb90e72b"
 
 [[projects]]
-  digest = "1:184008c955d6a3226b700c13ed0e875a7a051a759618f9bccba9b5c99f17faa5"
   name = "github.com/eclipse/paho.mqtt.golang"
   packages = [
     ".",
-    "packets",
+    "packets"
   ]
-  pruneopts = "UT"
   revision = "36d01c2b4cbeb3d2a12063e4880ce30800af9560"
   version = "v1.1.1"
 
 [[projects]]
-  digest = "1:865079840386857c809b72ce300be7580cb50d3d3129ce11bf9aa6ca2bc1934a"
   name = "github.com/fatih/color"
   packages = ["."]
   revision = "5b77d2a35fb0ede96d138fc9a99f5c9b6aef11b4"
@@ -138,8 +129,8 @@
 [[projects]]
   name = "github.com/go-logfmt/logfmt"
   packages = ["."]
-  revision = "390ab7935ee28ec6b286364bba9b4dd6410cb3d5"
-  version = "v0.3.0"
+  revision = "07c9b44f60d7ffdfb7d8efe1ad539965737836dc"
+  version = "v0.4.0"
 
 [[projects]]
   name = "github.com/go-redis/redis"
@@ -153,14 +144,14 @@
     "internal/singleflight",
     "internal/util"
   ]
-  revision = "f3bba01df2026fc865f7782948845db9cf44cf23"
-  version = "v6.14.1"
+  revision = "b3d9bf10f6666b2ee5100a6f3f84f4caf3b4e37d"
+  version = "v6.14.2"
 
 [[projects]]
   name = "github.com/go-stack/stack"
   packages = ["."]
-  revision = "259ab82a6cad3992b4e21ff5cac294ccb06474bc"
-  version = "v1.7.0"
+  revision = "2fee6af1a9795aafbe0253a0cfbdf668e1fb8a9a"
+  version = "v1.8.0"
 
 [[projects]]
   name = "github.com/go-zoo/bone"
@@ -177,7 +168,7 @@
     "internal/murmur",
     "internal/streams"
   ]
-  revision = "68ae1e384be4d7cd7df0f5b77f331759d806308e"
+  revision = "70385f88b28b43805bd83d212169ab2d38810b15"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -210,6 +201,7 @@
   version = "v1.4.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/hailocab/go-hostpool"
   packages = ["."]
   revision = "e80d13ce29ede4452c43dea11e79b9bc8a15b478"
@@ -227,8 +219,23 @@
     "models",
     "pkg/escape"
   ]
-  revision = "a2ba6e7654fb078f8a3f5add1f8d935df38161bd"
-  version = "v1.6.4"
+  revision = "cb03c542a4054f0f4d3dc13919d31c456bdb5c39"
+  version = "v1.7.1"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/influxdata/platform"
+  packages = [
+    "models",
+    "pkg/escape"
+  ]
+  revision = "5c2c8d40908223c84024dc03b34de29bb9cb0cf9"
+
+[[projects]]
+  name = "github.com/konsorten/go-windows-terminal-sequences"
+  packages = ["."]
+  revision = "5c8c8bd35d3832f5d134ae1e1e375b69a4d25242"
+  version = "v1.0.1"
 
 [[projects]]
   branch = "master"
@@ -243,7 +250,7 @@
     ".",
     "oid"
   ]
-  revision = "d34b9ff171c21ad295489235aec8b6626023cd04"
+  revision = "9eb73efc1fcc404148b56765b0d3f61d9a5ef8ee"
 
 [[projects]]
   name = "github.com/mattn/go-colorable"
@@ -254,20 +261,23 @@
 [[projects]]
   name = "github.com/mattn/go-isatty"
   packages = ["."]
-  revision = "0360b2af4f38e8d38c7fce2a9f4e702702d73a39"
-  version = "v0.0.3"
+  revision = "6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c"
+  version = "v0.0.4"
 
 [[projects]]
   name = "github.com/matttproud/golang_protobuf_extensions"
   packages = ["pbutil"]
-  revision = "3247c84500bff8d9fb6d579d800f20b3e091582c"
-  version = "v1.0.0"
+  revision = "c12348ce28de40eed0136aa2b644d0ee0650e56c"
+  version = "v1.0.1"
 
 [[projects]]
   name = "github.com/mongodb/mongo-go-driver"
   packages = [
     "bson",
-    "bson/builder",
+    "bson/bsoncodec",
+    "bson/bsoncore",
+    "bson/bsonrw",
+    "bson/bsontype",
     "bson/decimal",
     "bson/elements",
     "bson/objectid",
@@ -297,6 +307,7 @@
     "internal",
     "mongo",
     "mongo/aggregateopt",
+    "mongo/bulkwriteopt",
     "mongo/changestreamopt",
     "mongo/clientopt",
     "mongo/collectionopt",
@@ -313,10 +324,12 @@
     "mongo/mongoopt",
     "mongo/replaceopt",
     "mongo/runcmdopt",
+    "mongo/sessionopt",
+    "mongo/transactionopt",
     "mongo/updateopt"
   ]
-  revision = "8df56f107cdd485351eb2523992c3364114b4b2e"
-  version = "v0.0.10"
+  revision = "8db96a607cde2fea156d9a72c26aa09271592591"
+  version = "v0.0.17"
 
 [[projects]]
   name = "github.com/nats-io/go-nats"
@@ -351,12 +364,9 @@
 
 [[projects]]
   name = "github.com/opencontainers/runc"
-  packages = [
-    "libcontainer/system",
-    "libcontainer/user"
-  ]
-  revision = "baf6536d6259209c3edfa2b22237af82942d3dfa"
-  version = "v0.1.1"
+  packages = ["libcontainer/user"]
+  revision = "ccb5efd37fb7c86364786e9137e22948751de7ed"
+  version = "v1.0.0-rc6"
 
 [[projects]]
   name = "github.com/ory/dockertest"
@@ -386,8 +396,8 @@
     "docker/types/strslice",
     "docker/types/versions"
   ]
-  revision = "2e92e7784b6fb199fd168aa46269a2f1b34f299e"
-  version = "v3.3.0"
+  revision = "9f1141b78507d23603f6be530587664ebb63a8d2"
+  version = "v3.3.2"
 
 [[projects]]
   name = "github.com/pkg/errors"
@@ -415,7 +425,7 @@
   branch = "master"
   name = "github.com/prometheus/client_model"
   packages = ["go"]
-  revision = "99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c"
+  revision = "5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f"
 
 [[projects]]
   branch = "master"
@@ -425,7 +435,7 @@
     "internal/bitbucket.org/ww/goautoneg",
     "model"
   ]
-  revision = "d811d2e9bf898806ecfb6ef6296774b13ffc314c"
+  revision = "4724e9255275ce38f7179b2478abeae4e28c904f"
 
 [[projects]]
   branch = "master"
@@ -436,7 +446,7 @@
     "nfs",
     "xfs"
   ]
-  revision = "8b1c2da0d56deffdbb9e48d4414b4e674bd8083e"
+  revision = "1dc9a6cbc91aacc3e8b2d63db4d2e957a5394ac4"
 
 [[projects]]
   branch = "master"
@@ -456,8 +466,8 @@
 [[projects]]
   name = "github.com/sirupsen/logrus"
   packages = ["."]
-  revision = "c155da19408a8799da419ed3eeb0cb5db0ad5dbc"
-  version = "v1.0.5"
+  revision = "bcd833dfe83d3cebad139e4a29ed79cb2318bf95"
+  version = "v1.2.0"
 
 [[projects]]
   name = "github.com/sony/gobreaker"
@@ -474,8 +484,8 @@
 [[projects]]
   name = "github.com/spf13/pflag"
   packages = ["."]
-  revision = "583c0c0531f06d5278b7d917446061adc344b5cd"
-  version = "v1.0.1"
+  revision = "298182f68c66c05229eb03ac171abe6e309ee79a"
+  version = "v1.0.3"
 
 [[projects]]
   name = "github.com/stretchr/testify"
@@ -494,6 +504,18 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/xdg/scram"
+  packages = ["."]
+  revision = "7eeb5667e42c09cb51bf7b7c28aea8c56767da90"
+
+[[projects]]
+  name = "github.com/xdg/stringprep"
+  packages = ["."]
+  revision = "bd625b8dc1e3b0f57412280ccbcc317f0c69d8db"
+  version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
   name = "golang.org/x/crypto"
   packages = [
     "bcrypt",
@@ -501,11 +523,10 @@
     "pbkdf2",
     "ssh/terminal"
   ]
-  revision = "4d3f4d9ffa16a13f451c3b2999e9c49e9750bf06"
+  revision = "505ab145d0a99da450461ae2c1a9f6cd10d1f447"
 
 [[projects]]
   branch = "master"
-  digest = "1:70e155783b8dfd4f7697243384e2f361930ff0751459580769ce44d511f38b05"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -517,16 +538,15 @@
     "internal/timeseries",
     "proxy",
     "trace",
-    "websocket",
-    "trace"
+    "websocket"
   ]
-  revision = "f73e4c9ed3b7ebdd5f699a16a880c2b1994e50dd"
+  revision = "351d144fa1fc0bd934e2408202be0c29f25e35a0"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sync"
   packages = ["semaphore"]
-  revision = "1d60e4601c6fd243af51cc01ddf169918a5407ca"
+  revision = "42b317875d0fa942474b76e1b46a6060d720ae6e"
 
 [[projects]]
   branch = "master"
@@ -535,7 +555,7 @@
     "unix",
     "windows"
   ]
-  revision = "7dfd1290c7917b7ba22824b9d24954ab3002fe24"
+  revision = "70b957f3b65e069b4930ea94e2721eefa0f8f695"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -562,7 +582,7 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "86e600f69ee4704c6efbf6a2a40a5c10700e76c2"
+  revision = "bd91e49a0898e27abb88c339b432fa53d7497ac0"
 
 [[projects]]
   name = "google.golang.org/grpc"
@@ -571,17 +591,22 @@
     "balancer",
     "balancer/base",
     "balancer/roundrobin",
+    "binarylog/grpc_binarylog_v1",
     "codes",
     "connectivity",
     "credentials",
+    "credentials/internal",
     "encoding",
     "encoding/proto",
     "grpclog",
     "internal",
     "internal/backoff",
+    "internal/binarylog",
     "internal/channelz",
     "internal/envconfig",
     "internal/grpcrand",
+    "internal/grpcsync",
+    "internal/syscall",
     "internal/transport",
     "keepalive",
     "metadata",
@@ -594,14 +619,14 @@
     "status",
     "tap"
   ]
-  revision = "2e463a05d100327ca47ac218281906921038fd95"
-  version = "v1.16.0"
+  revision = "df014850f6dee74ba2fc94874043a9f3f75fbfd8"
+  version = "v1.17.0"
 
 [[projects]]
   name = "gopkg.in/gorp.v1"
   packages = ["."]
-  revision = "c87af80f3cc5036b55b83d77171e156791085e2e"
-  version = "v1.7.1"
+  revision = "6a667da9c028871f98598d85413e3fc4c6daa52e"
+  version = "v1.7.2"
 
 [[projects]]
   name = "gopkg.in/inf.v0"
@@ -618,49 +643,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  input-imports = [
-    "github.com/asaskevich/govalidator",
-    "github.com/cisco/senml",
-    "github.com/davecgh/go-spew/spew",
-    "github.com/dereulenspiegel/coap-mux",
-    "github.com/dgrijalva/jwt-go",
-    "github.com/dustin/go-coap",
-    "github.com/eclipse/paho.mqtt.golang",
-    "github.com/fatih/color",
-    "github.com/go-kit/kit/endpoint",
-    "github.com/go-kit/kit/log",
-    "github.com/go-kit/kit/metrics",
-    "github.com/go-kit/kit/metrics/prometheus",
-    "github.com/go-kit/kit/transport/grpc",
-    "github.com/go-kit/kit/transport/http",
-    "github.com/go-redis/redis",
-    "github.com/go-zoo/bone",
-    "github.com/gocql/gocql",
-    "github.com/gogo/protobuf/proto",
-    "github.com/golang/protobuf/proto",
-    "github.com/gorilla/websocket",
-    "github.com/influxdata/influxdb/client/v2",
-    "github.com/lib/pq",
-    "github.com/mongodb/mongo-go-driver/bson",
-    "github.com/mongodb/mongo-go-driver/mongo",
-    "github.com/mongodb/mongo-go-driver/mongo/findopt",
-    "github.com/nats-io/go-nats",
-    "github.com/prometheus/client_golang/prometheus",
-    "github.com/prometheus/client_golang/prometheus/promhttp",
-    "github.com/rubenv/sql-migrate",
-    "github.com/satori/go.uuid",
-    "github.com/sony/gobreaker",
-    "github.com/spf13/cobra",
-    "github.com/stretchr/testify/assert",
-    "github.com/stretchr/testify/require",
-    "golang.org/x/crypto/bcrypt",
-    "golang.org/x/net/context",
-    "google.golang.org/grpc",
-    "google.golang.org/grpc/codes",
-    "google.golang.org/grpc/credentials",
-    "google.golang.org/grpc/status",
-    "gopkg.in/ory-am/dockertest.v3",
-  ]
-  inputs-digest = "e268215396c5c84a81b8f55b0d0c3ad346e6ba1a223490ad97b5718d3fe475ff"
+  inputs-digest = "96f3fcd7c3539e021230f0a500f0c3281f6ad6b06e455a9e9585b89f932f184e"
   solver-name = "gps-cdcl"
   solver-version = 1
